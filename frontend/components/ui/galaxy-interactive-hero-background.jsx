@@ -4,7 +4,10 @@ import React, { Suspense } from "react"
 import dynamic from "next/dynamic"
 import { useTheme } from "next-themes"
 
-const Spline = dynamic(() => import("@splinetool/react-spline"), { ssr: false })
+const Spline = dynamic(
+  () => import("@splinetool/react-spline/next"),
+  { ssr: false }
+);
 
 export default function GalaxyInteractiveHeroBackground({ children }) {
   const { theme } = useTheme()
