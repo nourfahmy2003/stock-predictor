@@ -1,0 +1,154 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, TrendingUp, Brain, Zap } from "lucide-react"
+import { AnimatedCounter } from "./animated-counter"
+import { motion, AnimatePresence } from "framer-motion"
+
+export function PredictionPanel({ ticker }) {
+  const [isTraining, setIsTraining] = useState(false)
+  const [predictions, setPredictions] = useState(null)
+
+  const handleTrainModel = async () => {
+    setIsTraining(true)
+    setPredictions(null) // Clear previous predictions when starting new training
+
+    // Simulate API call
+    setTimeout(() => {
+      setPredictions({
+        nextPrice: 185.42,
+        confidence: 78,
+        accuracy: 82.5,
+        trend: "bullish",
+      })
+      setIsTraining(false)
+    }, 3000)
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card className="bg-card border-grid relative overflow-hidden">
+        <AnimatePresence>
+          {isTraining && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center"
+            >
+              <div className="text-center space-y-4">
+                <div className="relative">
+                  <div className="w-16 h-16 mx-auto relative">
+                    <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <Zap className="absolute inset-0 m-auto w-6 h-6 text-primary animate-pulse" />
+                  </div>
+                  <div className="absolute -top-2 -right-2 w-3 h-3 bg-primary rounded-full animate-ping"></div>
+                  <div className="absolute -bottom-2 -left-2 w-2 h-2 bg-success rounded-full animate-ping delay-300"></div>
+                  <div className="absolute top-1/2 -left-4 w-2 h-2 bg-primary/60 rounded-full animate-ping delay-700"></div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-lg font-medium text-foreground">Crunching the numbers…</p>
+                  <p className="text-sm text-muted-foreground">Please wait while we generate your prediction</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-white">
+            <Brain className="size-5 text-primary" />
+            AI Prediction Model
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center space-y-4">
+            <Button
+              onClick={handleTrainModel}
+              disabled={isTraining}
+              variant="glow"
+              size="xl"
+              className="w-full transition-all duration-200"
+            >
+              {isTraining ? (
+                <>
+                  <Loader2 className="size-5 animate-spin" />
+                  Running…
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="size-5" />
+                  Run AI Prediction
+                </>
+              )}
+            </Button>
+
+            <AnimatePresence>
+              {predictions && !isTraining && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  className="grid grid-cols-2 gap-4 mt-6"
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2, duration: 0.4 }}
+                  >
+                    <Card className="bg-background/50 hover:bg-background/70 transition-colors">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-sm text-muted mb-1">Next Price</div>
+                        <div className="text-2xl font-bold text-success font-mono">
+                          $<AnimatedCounter value={predictions.nextPrice} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4, duration: 0.4 }}
+                  >
+                    <Card className="bg-background/50 hover:bg-background/70 transition-colors">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-sm text-muted mb-1">Confidence</div>
+                        <div className="text-2xl font-bold text-primary font-mono">
+                          <AnimatedCounter value={predictions.confidence} />%
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {predictions && !isTraining && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6, duration: 0.4 }}
+                  className="flex justify-center gap-2 mt-4"
+                >
+                  <Badge variant="outline" className="bg-success/20 text-success border-success/30">
+                    {predictions.accuracy}% Accuracy
+                  </Badge>
+                  <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">
+                    {predictions.trend}
+                  </Badge>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
