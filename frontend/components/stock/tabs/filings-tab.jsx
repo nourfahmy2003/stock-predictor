@@ -1,34 +1,22 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { FileText, ExternalLink, Calendar } from "lucide-react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react";
+import { FileText, ExternalLink, Calendar } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
-interface Filing {
-  id: string
-  type: string
-  description: string
-  date: string
-  url: string
-}
-
-interface FilingsTabProps {
-  ticker: string
-}
-
-export function FilingsTab({ ticker }: FilingsTabProps) {
-  const [filings, setFilings] = useState<Filing[]>([])
-  const [loading, setLoading] = useState(true)
+export function FilingsTab({ ticker }) {
+  const [filings, setFilings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Mock API call - in real app, this would fetch from /api/filings/{ticker}
     const fetchFilings = async () => {
-      setLoading(true)
+      setLoading(true);
 
-      await new Promise((resolve) => setTimeout(resolve, 800))
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-      const mockFilings: Filing[] = [
+      const mockFilings = [
         {
           id: "1",
           type: "10-K",
@@ -64,14 +52,14 @@ export function FilingsTab({ ticker }: FilingsTabProps) {
           date: "2023-12-18",
           url: "#",
         },
-      ]
+      ];
 
-      setFilings(mockFilings)
-      setLoading(false)
-    }
+      setFilings(mockFilings);
+      setLoading(false);
+    };
 
-    fetchFilings()
-  }, [ticker])
+    fetchFilings();
+  }, [ticker]);
 
   if (loading) {
     return (
@@ -86,7 +74,7 @@ export function FilingsTab({ ticker }: FilingsTabProps) {
           </Card>
         ))}
       </div>
-    )
+    );
   }
 
   return (
@@ -127,5 +115,5 @@ export function FilingsTab({ ticker }: FilingsTabProps) {
         ))}
       </div>
     </div>
-  )
+  );
 }
