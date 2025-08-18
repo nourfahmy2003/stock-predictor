@@ -15,6 +15,7 @@ export default function GalaxyInteractiveHeroBackground({ children }) {
       : `linear-gradient(to right, rgba(0,0,0,0.8), transparent 30%, transparent 70%, rgba(0,0,0,0.8)),
          linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.9))`
 
+
   return (
     <div className="relative min-h-screen">
       <div className="absolute inset-0 z-0 pointer-events-auto overflow-hidden">

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import PredictionChart from "@/components/stock/PredictionChart"
 
+
 export default function PredictionPanel() {
   const [ticker, setTicker] = useState("AAPL")
   const [lookBack, setLookBack] = useState(60)
@@ -37,6 +38,7 @@ export default function PredictionPanel() {
       setData(json)
     } catch (e) {
       if (e.name !== "AbortError") setError(String(e))
+
     } finally {
       setLoading(false)
     }
@@ -74,6 +76,7 @@ export default function PredictionPanel() {
       {error && <p className="text-danger">{error}</p>}
 
       {!loading && rows.length > 0 && <PredictionChart data={rows} />}
+
     </div>
   )
 }
