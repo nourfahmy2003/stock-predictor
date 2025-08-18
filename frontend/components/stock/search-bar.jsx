@@ -60,8 +60,8 @@ const SearchBar = React.forwardRef(({ className, onTickerSelect, suggestions = [
           className={cn(
             "pl-12 pr-4 h-14 text-lg rounded-xl border-2 transition-all duration-300",
             "focus:border-primary focus:ring-2 focus:ring-primary/20",
-            "bg-white/90 dark:bg-card/90 backdrop-blur-sm shadow-inner",
-            "placeholder:text-muted-foreground/70",
+            "bg-white text-zinc-900 placeholder-zinc-500 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-400",
+            "backdrop-blur-sm shadow-inner",
             isFocused && "shadow-xl shadow-primary/20 border-primary",
             className,
           )}

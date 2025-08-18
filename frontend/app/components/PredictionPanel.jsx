@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import PredictionChart from "@/components/stock/PredictionChart"
+
 
 export default function PredictionPanel() {
   const [ticker, setTicker] = useState("AAPL")
@@ -11,18 +13,23 @@ export default function PredictionPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [data, setData] = useState(null)
+  const abortRef = useRef(null)
 
   async function run() {
     try {
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
       setLoading(true)
       setError(null)
-      setData(null)
       const qs = new URLSearchParams({
         ticker,
         look_back: String(lookBack),
         horizon: String(horizon),
       })
-      const res = await fetch(`/api/forecast?${qs.toString()}`)
+      const res = await fetch(`/api/forecast?${qs.toString()}`, {
+        signal: controller.signal,
+      })
       if (!res.ok) {
         setError(`HTTP ${res.status}`)
         return
@@ -30,13 +37,17 @@ export default function PredictionPanel() {
       const json = await res.json()
       setData(json)
     } catch (e) {
-      setError(String(e))
+      if (e.name !== "AbortError") setError(String(e))
+
     } finally {
       setLoading(false)
     }
   }
-
-  const rows = data?.forecast?.slice(0, 10) ?? []
+  const rows = (data?.forecast ?? []).map((r) => ({
+    date: new Date(r.date).toLocaleDateString(),
+    pred_price: r.pred_price ?? null,
+    pred_return: r.pred_return ?? null,
+  }))
 
   return (
     <div className="max-w-3xl mx-auto my-6 space-y-4">
@@ -61,39 +72,11 @@ export default function PredictionPanel() {
         </Button>
       </div>
 
-      {loading && <p>Loading…</p>}
+      {loading && <p>Running model…</p>}
       {error && <p className="text-danger">{error}</p>}
 
-      {rows.length > 0 && (
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr>
-              <th className="text-left p-2">Date</th>
-              <th className="text-right p-2">Predicted Price</th>
-              <th className="text-right p-2">Predicted Return (%)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                <td className="p-2">
-                  {r?.date ? new Date(r.date).toLocaleDateString() : "-"}
-                </td>
-                <td className="p-2 text-right">
-                  {r?.pred_price !== null && r?.pred_price !== undefined
-                    ? Number(r.pred_price).toFixed(2)
-                    : "-"}
-                </td>
-                <td className="p-2 text-right">
-                  {r?.pred_return !== null && r?.pred_return !== undefined
-                    ? (Number(r.pred_return) * 100).toFixed(2) + "%"
-                    : "-"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      {!loading && rows.length > 0 && <PredictionChart data={rows} />}
+
     </div>
   )
 }

@@ -33,8 +33,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${poppins.variable} ${inter.variable} ${robotoMono.variable} antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange={false}>
+      <body
+        className={`${poppins.variable} ${inter.variable} ${robotoMono.variable} antialiased bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100`}
+      >
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Navbar />
           <main className="pt-20">{children}</main>
         </ThemeProvider>
