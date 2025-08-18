@@ -1,70 +1,63 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { Calendar, Play, Pause, RotateCcw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
-import { cn } from "@/lib/utils"
+import * as React from "react";
+import { Calendar, Play, Pause, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
 
-interface TimeTravelSliderProps {
-  onDateChange?: (date: Date) => void
-  className?: string
-  isPlaying?: boolean
-  onPlayToggle?: () => void
-}
-
-export function TimeTravelSlider({ onDateChange, className, isPlaying = false, onPlayToggle }: TimeTravelSliderProps) {
-  const [currentIndex, setCurrentIndex] = React.useState(100) // Start at present (100%)
-  const [isAutoPlaying, setIsAutoPlaying] = React.useState(false)
+export function TimeTravelSlider({ onDateChange, className, isPlaying = false, onPlayToggle }) {
+  const [currentIndex, setCurrentIndex] = React.useState(100); // Start at present (100%)
+  const [isAutoPlaying, setIsAutoPlaying] = React.useState(false);
 
   // Generate date range (last 2 years)
   const dateRange = React.useMemo(() => {
-    const dates = []
-    const endDate = new Date()
-    const startDate = new Date(endDate.getTime() - 2 * 365 * 24 * 60 * 60 * 1000)
+    const dates = [];
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - 2 * 365 * 24 * 60 * 60 * 1000);
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 7)) {
       // Weekly intervals
-      dates.push(new Date(d))
+      dates.push(new Date(d));
     }
-    return dates
-  }, [])
+    return dates;
+  }, []);
 
   const currentDate = React.useMemo(() => {
-    const index = Math.floor((currentIndex / 100) * (dateRange.length - 1))
-    return dateRange[index] || new Date()
-  }, [currentIndex, dateRange])
+    const index = Math.floor((currentIndex / 100) * (dateRange.length - 1));
+    return dateRange[index] || new Date();
+  }, [currentIndex, dateRange]);
 
   React.useEffect(() => {
-    onDateChange?.(currentDate)
-  }, [currentDate, onDateChange])
+    onDateChange?.(currentDate);
+  }, [currentDate, onDateChange]);
 
   React.useEffect(() => {
-    let interval: NodeJS.Timeout
+    let interval;
     if (isAutoPlaying && currentIndex < 100) {
       interval = setInterval(() => {
         setCurrentIndex((prev) => {
-          const next = prev + 1
+          const next = prev + 1;
           if (next >= 100) {
-            setIsAutoPlaying(false)
-            return 100
+            setIsAutoPlaying(false);
+            return 100;
           }
-          return next
-        })
-      }, 200) // Fast playback
+          return next;
+        });
+      }, 200); // Fast playback
     }
-    return () => clearInterval(interval)
-  }, [isAutoPlaying, currentIndex])
+    return () => clearInterval(interval);
+  }, [isAutoPlaying, currentIndex]);
 
   const handlePlayToggle = () => {
-    setIsAutoPlaying(!isAutoPlaying)
-    onPlayToggle?.()
-  }
+    setIsAutoPlaying(!isAutoPlaying);
+    onPlayToggle?.();
+  };
 
   const handleReset = () => {
-    setCurrentIndex(100)
-    setIsAutoPlaying(false)
-  }
+    setCurrentIndex(100);
+    setIsAutoPlaying(false);
+  };
 
   return (
     <div className={cn("space-y-4 p-4 bg-card/50 backdrop-blur-sm rounded-xl border", className)}>
@@ -109,5 +102,5 @@ export function TimeTravelSlider({ onDateChange, className, isPlaying = false, o
         </div>
       </div>
     </div>
-  )
+  );
 }

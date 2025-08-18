@@ -1,20 +1,15 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { cn } from "@/lib/utils"
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
-interface PageTransitionProps {
-  children: React.ReactNode
-  className?: string
-}
-
-export function PageTransition({ children, className }: PageTransitionProps) {
-  const [isVisible, setIsVisible] = React.useState(false)
+export function PageTransition({ children, className }) {
+  const [isVisible, setIsVisible] = React.useState(false);
 
   React.useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), 50)
-    return () => clearTimeout(timer)
-  }, [])
+    const timer = setTimeout(() => setIsVisible(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div
@@ -26,18 +21,10 @@ export function PageTransition({ children, className }: PageTransitionProps) {
     >
       {children}
     </div>
-  )
+  );
 }
 
-export function StaggeredFadeIn({
-  children,
-  delay = 100,
-  className,
-}: {
-  children: React.ReactNode[]
-  delay?: number
-  className?: string
-}) {
+export function StaggeredFadeIn({ children, delay = 100, className }) {
   return (
     <div className={className}>
       {React.Children.map(children, (child, index) => (
@@ -50,5 +37,5 @@ export function StaggeredFadeIn({
         </div>
       ))}
     </div>
-  )
+  );
 }

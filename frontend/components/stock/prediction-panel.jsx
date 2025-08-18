@@ -1,69 +1,44 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Loader2, TrendingUp, Brain, Zap } from "lucide-react"
-import { AnimatedCounter } from "./animated-counter"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, TrendingUp, Brain, Zap } from "lucide-react";
+import { AnimatedCounter } from "./animated-counter";
+import { motion, AnimatePresence } from "framer-motion";
 
-type ForecastRow = {
-  date: string
-  pred_return: number | null
-  pred_price: number | null
-}
-
-type ForecastResponse = {
-  ticker: string
-  look_back: number
-  horizon: number
-  forecast: ForecastRow[]
-}
-
-interface PredictionPanelProps {
-  ticker: string
-}
-
-export function PredictionPanel({ ticker }: PredictionPanelProps) {
-  const [isTraining, setIsTraining] = useState(false)
-  const [predictions, setPredictions] = useState<
-    | {
-        nextPrice: number
-        confidence: number
-        accuracy: number
-        trend: string
-      }
-    | null
-  >(null)
-  const [forecastData, setForecastData] = useState<ForecastResponse | null>(null)
-  const [status, setStatus] = useState<"idle" | "loading" | "error" | "done">("idle")
-  const [error, setError] = useState<string | null>(null)
-  const [lookBack] = useState<number>(60)
-  const [horizon] = useState<number>(10)
+export function PredictionPanel({ ticker }) {
+  const [isTraining, setIsTraining] = useState(false);
+  const [predictions, setPredictions] = useState(null);
+  const [forecastData, setForecastData] = useState(null);
+  const [status, setStatus] = useState("idle");
+  const [error, setError] = useState(null);
+  const [lookBack] = useState(60);
+  const [horizon] = useState(10);
 
   async function runForecast() {
     const url = `/api/forecast?ticker=${encodeURIComponent(
       ticker
-    )}&look_back=${lookBack}&horizon=${horizon}`
-    setStatus("loading")
-    setIsTraining(true)
-    setError(null)
+    )}&look_back=${lookBack}&horizon=${horizon}`;
+    setStatus("loading");
+    setIsTraining(true);
+    setError(null);
     try {
-      const res = await fetch(url)
+      const res = await fetch(url);
       if (!res.ok) {
-        setStatus("error")
-        setError("Request failed")
-        return
+        setStatus("error");
+        setError("Request failed");
+        return;
       }
-      const json: ForecastResponse = await res.json()
-      setForecastData(json)
-      setStatus("done")
+      const json = await res.json();
+      setForecastData(json);
+      setStatus("done");
     } catch (e) {
-      setStatus("error")
-      setError("Request failed")
+      setStatus("error");
+      setError("Request failed");
     } finally {
-      setIsTraining(false)
+      setIsTraining(false);
     }
   }
 
@@ -197,5 +172,5 @@ export function PredictionPanel({ ticker }: PredictionPanelProps) {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
