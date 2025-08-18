@@ -8,24 +8,63 @@ import { Loader2, TrendingUp, Brain, Zap } from "lucide-react"
 import { AnimatedCounter } from "./animated-counter"
 import { motion, AnimatePresence } from "framer-motion"
 
-export function PredictionPanel({ ticker }) {
+type ForecastRow = {
+  date: string
+  pred_return: number | null
+  pred_price: number | null
+}
+
+type ForecastResponse = {
+  ticker: string
+  look_back: number
+  horizon: number
+  forecast: ForecastRow[]
+}
+
+interface PredictionPanelProps {
+  ticker: string
+}
+
+export function PredictionPanel({ ticker }: PredictionPanelProps) {
   const [isTraining, setIsTraining] = useState(false)
-  const [predictions, setPredictions] = useState(null)
+  const [predictions, setPredictions] = useState<
+    | {
+        nextPrice: number
+        confidence: number
+        accuracy: number
+        trend: string
+      }
+    | null
+  >(null)
+  const [forecastData, setForecastData] = useState<ForecastResponse | null>(null)
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "done">("idle")
+  const [error, setError] = useState<string | null>(null)
+  const [lookBack] = useState<number>(60)
+  const [horizon] = useState<number>(10)
 
-  const handleTrainModel = async () => {
+  async function runForecast() {
+    const url = `/api/forecast?ticker=${encodeURIComponent(
+      ticker
+    )}&look_back=${lookBack}&horizon=${horizon}`
+    setStatus("loading")
     setIsTraining(true)
-    setPredictions(null) // Clear previous predictions when starting new training
-
-    // Simulate API call
-    setTimeout(() => {
-      setPredictions({
-        nextPrice: 185.42,
-        confidence: 78,
-        accuracy: 82.5,
-        trend: "bullish",
-      })
+    setError(null)
+    try {
+      const res = await fetch(url)
+      if (!res.ok) {
+        setStatus("error")
+        setError("Request failed")
+        return
+      }
+      const json: ForecastResponse = await res.json()
+      setForecastData(json)
+      setStatus("done")
+    } catch (e) {
+      setStatus("error")
+      setError("Request failed")
+    } finally {
       setIsTraining(false)
-    }, 3000)
+    }
   }
 
   return (
@@ -69,13 +108,13 @@ export function PredictionPanel({ ticker }) {
         <CardContent>
           <div className="text-center space-y-4">
             <Button
-              onClick={handleTrainModel}
-              disabled={isTraining}
+              onClick={runForecast}
+              disabled={status === "loading"}
               variant="glow"
               size="xl"
               className="w-full transition-all duration-200"
             >
-              {isTraining ? (
+              {status === "loading" ? (
                 <>
                   <Loader2 className="size-5 animate-spin" />
                   Running…
@@ -87,6 +126,14 @@ export function PredictionPanel({ ticker }) {
                 </>
               )}
             </Button>
+
+            {forecastData && (
+              <pre className="text-left mt-4 whitespace-pre-wrap">
+                {JSON.stringify(forecastData, null, 2)}
+              </pre>
+            )}
+
+            {status === "error" && <p className="text-sm text-danger">{error}</p>}
 
             <AnimatePresence>
               {predictions && !isTraining && (

@@ -1,6 +1,6 @@
 "use client"
 
-import BackgroundFX from "@/components/ui/background-fx"
+import GalaxyInteractiveHeroBackground from "@/components/ui/galaxy-interactive-hero-background"
 import HomeHero from "@/components/home/home-hero"
 import KeyActions from "@/components/home/key-actions"
 import WhoUsesThis from "@/components/home/who-uses-this"
@@ -10,9 +10,9 @@ import Footer from "@/components/home/footer"
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background relative">
-      <BackgroundFX />
-
-      <HomeHero />
+      <GalaxyInteractiveHeroBackground>
+        <HomeHero />
+      </GalaxyInteractiveHeroBackground>
 
       <KeyActions />
 
