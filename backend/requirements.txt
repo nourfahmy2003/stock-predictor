@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+papermill
+nbformat
+nbclient
+ipykernel
+pandas
+numpy
+yfinance
+scikit-learn
+tensorflow==2.20.0
+pandas-market-calendars
+matplotlib
