@@ -1,56 +1,44 @@
-import { fetchWithTimeout } from '@/lib/http'
+import { NextResponse } from "next/server";
+import yahooFinance from "yahoo-finance2";
 
-export const runtime = 'nodejs'
-export const revalidate = 300
-
-export async function GET(req, { params }) {
-  const { ticker } = params
-  const symbol = ticker?.toUpperCase()
-  if (!symbol) {
-    return new Response(JSON.stringify({ error: 'invalid ticker' }), {
-      status: 400,
-    })
-  }
-
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=price,summaryDetail,defaultKeyStatistics`
-
+export async function GET(_req, { params }) {
   try {
-    const res = await fetchWithTimeout(url, { headers: { accept: 'application/json' } })
-    if (!res.ok) {
-      return new Response(JSON.stringify({ error: 'upstream error' }), { status: 503 })
-    }
-    const json = await res.json()
-    const result = json?.quoteSummary?.result?.[0]
-    if (!result) {
-      return new Response(JSON.stringify({ error: 'invalid ticker' }), { status: 400 })
-    }
+    const t = String(params.ticker || "").toUpperCase();
 
-    const price = result.price || {}
-    const summary = result.summaryDetail || {}
-    const stats = result.defaultKeyStatistics || {}
+    const { price, summaryDetail, defaultKeyStatistics } =
+      await yahooFinance.quoteSummary(t, {
+        modules: ["price", "summaryDetail", "defaultKeyStatistics"],
+      });
 
-    const payload = {
-      ticker: symbol,
-      price: price.regularMarketPrice?.raw ?? null,
-      change: price.regularMarketChange?.raw ?? null,
-      changePercent: price.regularMarketChangePercent?.raw ?? null,
-      currency: price.currency || 'USD',
-      volume: summary.volume?.raw ?? price.regularMarketVolume?.raw ?? null,
-      marketCap: summary.marketCap?.raw ?? null,
-      peRatio: summary.trailingPE?.raw ?? stats.trailingPE?.raw ?? null,
-      dayLow: price.regularMarketDayLow?.raw ?? null,
-      dayHigh: price.regularMarketDayHigh?.raw ?? null,
-      regularMarketTime: price.regularMarketTime?.raw ?? null,
-    }
+    const nowPrice = price?.regularMarketPrice ?? null;
+    const change = price?.regularMarketChange ?? null;
+    const changePct = price?.regularMarketChangePercent ?? null;
+    const volume = price?.regularMarketVolume ?? summaryDetail?.volume ?? null;
+    const peRatio =
+      summaryDetail?.trailingPE ?? defaultKeyStatistics?.trailingPE ?? null;
+    const dayLow = price?.regularMarketDayLow ?? summaryDetail?.dayLow ?? null;
+    const dayHigh = price?.regularMarketDayHigh ?? summaryDetail?.dayHigh ?? null;
+    const marketCap = price?.marketCap ?? summaryDetail?.marketCap ?? null;
+    const currency = price?.currency ?? null;
+    const asOf = price?.regularMarketTime ?? Date.now();
 
-    return new Response(JSON.stringify(payload), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 's-maxage=120, stale-while-revalidate=86400',
+    return NextResponse.json(
+      {
+        ticker: t,
+        price: nowPrice,
+        change,
+        changePercent: changePct,
+        volume,
+        peRatio,
+        marketCap,
+        dayRange: { low: dayLow, high: dayHigh },
+        currency,
+        asOf,
       },
-    })
+      { headers: { "Cache-Control": "s-maxage=15, stale-while-revalidate=60" } }
+    );
   } catch (err) {
-    return new Response(JSON.stringify({ error: 'upstream failure' }), { status: 503 })
+    console.error("overview route error:", err);
+    return NextResponse.json({ error: "fetch_failed" }, { status: 503 });
   }
 }

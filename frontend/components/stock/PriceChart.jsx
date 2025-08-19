@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import useSWR from "swr"
-import { useTheme } from "next-themes"
-import { useReducedMotion } from "framer-motion"
+import useSWR from "swr";
+import { useTheme } from "next-themes";
+import { useReducedMotion } from "framer-motion";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -12,22 +12,23 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceDot,
-} from "recharts"
+} from "recharts";
+import { API } from "@/lib/api";
 
-const fetcher = (url) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error("Network error")
-    return r.json()
-  })
+const fetcher = (path) =>
+  API(path).then((r) => {
+    if (!r.ok) throw new Error("Network error");
+    return r.json();
+  });
 
 export default function PriceChart({ ticker }) {
-  const { theme } = useTheme()
-  const reduceMotion = useReducedMotion()
+  const { theme } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { data, error, isLoading, mutate } = useSWR(
-    ticker ? `/api/chart/${ticker}?range=1y&interval=1d` : null,
+    ticker ? `/chart/${ticker}?range=1y&interval=1d` : null,
     fetcher,
     { dedupingInterval: 30000, keepPreviousData: true }
-  )
+  );
 
   if (isLoading) {
     return (
@@ -55,7 +56,7 @@ export default function PriceChart({ ticker }) {
     )
   }
 
-  const series = data?.series ?? []
+  const series = data?.series ?? [];
   if (series.length === 0) {
     return (
       <div className="h-80 w-full rounded-md border border-border flex items-center justify-center text-sm text-muted-foreground">
@@ -63,7 +64,7 @@ export default function PriceChart({ ticker }) {
       </div>
     )
   }
-  const prices = series.map((p) => p.c)
+  const prices = series.map((p) => p.close)
   const min = Math.min(...prices)
   const max = Math.max(...prices)
   const pad = (max - min) * 0.02
@@ -98,7 +99,7 @@ export default function PriceChart({ ticker }) {
             vertical={false}
           />
           <XAxis
-            dataKey="t"
+            dataKey="date"
             tickFormatter={formatX}
             stroke="hsl(var(--muted-foreground))"
             tick={{ fontSize: 12 }}
@@ -123,7 +124,7 @@ export default function PriceChart({ ticker }) {
           />
           <Area
             type="monotone"
-            dataKey="c"
+            dataKey="close"
             stroke="hsl(var(--primary))"
             fill="hsl(var(--primary) / 0.2)"
             strokeWidth={2}
@@ -133,8 +134,8 @@ export default function PriceChart({ ticker }) {
           />
           {last && (
             <ReferenceDot
-              x={last.t}
-              y={last.c}
+              x={last.date}
+              y={last.close}
               r={4}
               fill="hsl(var(--primary))"
               stroke="hsl(var(--background))"

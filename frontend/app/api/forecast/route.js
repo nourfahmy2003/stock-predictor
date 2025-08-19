@@ -14,7 +14,7 @@ export async function POST(req) {
     horizon,
     state: "queued",
     pct: 0,
-    eta: 5,
+    etaSeconds: 5,
     startedAt: Date.now(),
     finishedAt: null,
     result: null,
