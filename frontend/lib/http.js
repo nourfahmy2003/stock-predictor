@@ -1,5 +1,5 @@
 export async function fetchWithTimeout(url, options = {}) {
-  const { timeout = 20000, retries = 3, backoff = 500, headers = {}, ...rest } = options;
+  const { timeout = 20000, retries = 2, backoff = 500, headers = {}, ...rest } = options;
   const ua = { 'User-Agent': 'stock-predictor' };
 
   for (let attempt = 0; attempt <= retries; attempt++) {
