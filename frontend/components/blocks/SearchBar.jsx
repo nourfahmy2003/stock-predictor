@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import debounce from "lodash.debounce";
@@ -9,14 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-const fetcher = (url) => fetch(url).then((r) => r.json());
-
 export default function SearchBar({ className }) {
   const router = useRouter();
   const [value, setValue] = useState("");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(null);
+  const abortRef = useRef();
+
+  const fetcher = async (url) => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const res = await fetch(url, { signal: controller.signal });
+    return res.json();
+  };
 
   const debounced = useCallback(
     debounce((v) => setQuery(v), 200),
@@ -30,11 +37,18 @@ export default function SearchBar({ className }) {
     setOpen(true);
   };
 
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, mutate } = useSWR(
     query ? `/api/symbols/search?q=${encodeURIComponent(query)}` : null,
     fetcher,
-    { dedupingInterval: 30000 },
+    { dedupingInterval: 30000, keepPreviousData: true },
   );
+
+  useEffect(() => {
+    if (data?.partial) {
+      const id = setTimeout(() => mutate(), 2000);
+      return () => clearTimeout(id);
+    }
+  }, [data, mutate]);
 
   const items = data?.items || [];
   const groups = { stock: [], etf: [], crypto: [] };
@@ -104,6 +118,11 @@ export default function SearchBar({ className }) {
           role="listbox"
           className="absolute z-50 mt-2 w-full max-h-80 overflow-auto rounded-xl border bg-background text-foreground shadow-md"
         >
+          {data?.partial && (
+            <div className="px-3 py-1 text-xs text-muted-foreground">
+              Partial results – retrying…
+            </div>
+          )}
           {isLoading && (
             <div className="p-4 space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
