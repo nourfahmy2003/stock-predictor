@@ -1,80 +1,53 @@
 "use client"
+import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { API } from "@/lib/api"
 
-import { createContext, useContext, useState, useCallback } from "react"
-
-const PredictionContext = createContext()
+const PredictionCtx = createContext(null)
+export function usePrediction() {
+  return useContext(PredictionCtx)
+}
 
 export function PredictionStoreProvider({ children }) {
-  const [jobs, setJobs] = useState({})
+  const [state, setState] = useState({ active: null, forecast: null, error: null })
+  const activeRef = useRef(state.active)
+  useEffect(() => {
+    activeRef.current = state.active
+  }, [state.active])
 
-  const startJob = useCallback((ticker, jobId) => {
-    setJobs((prev) => ({
-      ...prev,
-      [ticker]: {
-        jobId,
-        state: "queued",
-        pct: 0,
-        etaSeconds: null,
-        startedAt: Date.now(),
-        finishedAt: null,
-        result: null,
-        error: null,
-      },
-    }))
-  }, [])
+  async function run(ticker, { look_back = 60, horizon = 10 } = {}) {
+    setState((s) => ({ ...s, active: { ticker, jobId: null }, error: null, forecast: null }))
 
-  const updateStatus = useCallback((ticker, patch) => {
-    setJobs((prev) => ({
-      ...prev,
-      [ticker]: { ...prev[ticker], ...patch },
-    }))
-  }, [])
-
-  const setResult = useCallback((ticker, result) => {
-    setJobs((prev) => ({
-      ...prev,
-      [ticker]: { ...prev[ticker], result, state: "done", finishedAt: Date.now() },
-    }))
-  }, [])
-
-  const setError = useCallback((ticker, error) => {
-    setJobs((prev) => ({
-      ...prev,
-      [ticker]: { ...prev[ticker], error, state: "error", finishedAt: Date.now() },
-    }))
-  }, [])
-
-  const clearJob = useCallback((ticker) => {
-    setJobs((prev) => {
-      const copy = { ...prev }
-      delete copy[ticker]
-      return copy
-    })
-  }, [])
-
-  const value = {
-    jobs,
-    startJob,
-    updateStatus,
-    setResult,
-    setError,
-    clearJob,
+    try {
+      const res = await API(`/forecast?ticker=${ticker}&look_back=${look_back}&horizon=${horizon}`)
+      if (!res.ok) throw new Error("forecast request failed")
+      const { jobId } = await res.json()
+      setState((s) => ({ ...s, active: { ticker, jobId } }))
+      await poll(jobId, ticker)
+    } catch (e) {
+      setState((s) => ({ ...s, error: e?.message || "Prediction failed", active: null }))
+    }
   }
 
-  return <PredictionContext.Provider value={value}>{children}</PredictionContext.Provider>
+  async function poll(jobId, ticker) {
+    while (true) {
+      await new Promise((r) => setTimeout(r, 1500))
+      if (activeRef.current?.ticker !== ticker) return
+      const r = await API(`/status?jobId=${jobId}`)
+      if (!r.ok) break
+      const json = await r.json()
+      if (json.state === "failed") {
+        setState((s) => ({ ...s, error: `Prediction failed for ${ticker}`, active: null }))
+        return
+      }
+      if (json.state === "succeeded") {
+        if (activeRef.current?.ticker !== ticker) return
+        setState((s) => ({ ...s, forecast: json.result, active: null }))
+        return
+      }
+    }
+    setState((s) => ({ ...s, error: `Prediction failed for ${ticker}`, active: null }))
+  }
+
+  return <PredictionCtx.Provider value={{ ...state, run }}>{children}</PredictionCtx.Provider>
 }
 
-export function usePredictionStore() {
-  return useContext(PredictionContext)
-}
-
-export function usePredictionJob(ticker) {
-  const { jobs } = useContext(PredictionContext)
-  return ticker ? jobs[ticker] : undefined
-}
-
-export function useAnyPredictionJob() {
-  const { jobs } = useContext(PredictionContext)
-  const tickers = Object.keys(jobs)
-  return tickers.length ? jobs[tickers[0]] : undefined
-}

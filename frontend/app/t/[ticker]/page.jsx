@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { AnimatedTabs } from "@/components/stock/animated-tabs";
 import HeaderPrice from "@/components/stock/HeaderPrice";
-import KpiRow from "@/components/stock/KpiRow";
+import { OverviewSection } from "@/components/stock/overview-section";
 import PriceChart from "@/components/stock/PriceChart";
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -60,7 +60,7 @@ export default function TickerPage() {
               <div className="space-y-6">
                 <Card>
                   <CardContent className="p-4">
-                    <KpiRow ticker={ticker} />
+                    <OverviewSection ticker={ticker} />
                   </CardContent>
                 </Card>
 

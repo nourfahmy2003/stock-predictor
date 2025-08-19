@@ -1,14 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Spline from "@splinetool/react-spline/next"
+import dynamic from "next/dynamic"
+
+const Spline = dynamic(() => import("@splinetool/react-spline/next"), { ssr: false })
 
 export default function GalaxyInteractiveHeroBackground({ children, scene }) {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [prefersReducedMotion, setPRM] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     const media = window.matchMedia("(prefers-reduced-motion: reduce)")
-    const update = () => setPrefersReducedMotion(media.matches)
+    const update = () => setPRM(media.matches)
     update()
     media.addEventListener("change", update)
     return () => media.removeEventListener("change", update)
@@ -16,10 +20,9 @@ export default function GalaxyInteractiveHeroBackground({ children, scene }) {
 
   return (
     <div className="relative min-h-[100dvh]">
-      {prefersReducedMotion ? (
-        <div
-          className="absolute inset-0 -z-10 bg-gradient-to-b from-white via-slate-100 to-slate-200 dark:from-zinc-900 dark:via-zinc-950 dark:to-black"
-        />
+      {/* Fallback background to avoid fetch during render */}
+      {!mounted || prefersReducedMotion ? (
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-white via-slate-100 to-slate-200 dark:from-zinc-900 dark:via-zinc-950 dark:to-black" />
       ) : (
         <div className="absolute inset-0 -z-10">
           <Spline
