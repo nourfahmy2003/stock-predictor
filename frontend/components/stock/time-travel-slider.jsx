@@ -6,14 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
 
-interface TimeTravelSliderProps {
-  onDateChange?: (date: Date) => void
-  className?: string
-  isPlaying?: boolean
-  onPlayToggle?: () => void
-}
-
-export function TimeTravelSlider({ onDateChange, className, isPlaying = false, onPlayToggle }: TimeTravelSliderProps) {
+export function TimeTravelSlider({ onDateChange, className, isPlaying = false, onPlayToggle }) {
   const [currentIndex, setCurrentIndex] = React.useState(100) // Start at present (100%)
   const [isAutoPlaying, setIsAutoPlaying] = React.useState(false)
 
@@ -40,7 +33,7 @@ export function TimeTravelSlider({ onDateChange, className, isPlaying = false, o
   }, [currentDate, onDateChange])
 
   React.useEffect(() => {
-    let interval: NodeJS.Timeout
+    let interval
     if (isAutoPlaying && currentIndex < 100) {
       interval = setInterval(() => {
         setCurrentIndex((prev) => {

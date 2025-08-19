@@ -5,20 +5,8 @@ import { FileText, ExternalLink, Calendar } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
-interface Filing {
-  id: string
-  type: string
-  description: string
-  date: string
-  url: string
-}
-
-interface FilingsTabProps {
-  ticker: string
-}
-
-export function FilingsTab({ ticker }: FilingsTabProps) {
-  const [filings, setFilings] = useState<Filing[]>([])
+export function FilingsTab({ ticker }) {
+  const [filings, setFilings] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -28,7 +16,7 @@ export function FilingsTab({ ticker }: FilingsTabProps) {
 
       await new Promise((resolve) => setTimeout(resolve, 800))
 
-      const mockFilings: Filing[] = [
+      const mockFilings = [
         {
           id: "1",
           type: "10-K",

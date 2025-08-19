@@ -3,12 +3,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-interface PageTransitionProps {
-  children: React.ReactNode
-  className?: string
-}
-
-export function PageTransition({ children, className }: PageTransitionProps) {
+export function PageTransition({ children, className }) {
   const [isVisible, setIsVisible] = React.useState(false)
 
   React.useEffect(() => {
@@ -33,10 +28,6 @@ export function StaggeredFadeIn({
   children,
   delay = 100,
   className,
-}: {
-  children: React.ReactNode[]
-  delay?: number
-  className?: string
 }) {
   return (
     <div className={className}>
