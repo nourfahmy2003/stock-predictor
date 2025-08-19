@@ -1,5 +1,3 @@
-"use client"
-
 import GalaxyInteractiveHeroBackground from "@/components/ui/galaxy-interactive-hero-background"
 import HomeHero from "@/components/home/home-hero"
 import KeyActions from "@/components/home/key-actions"

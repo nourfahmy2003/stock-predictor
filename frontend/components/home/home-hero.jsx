@@ -1,21 +1,12 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { SearchBar } from "@/components/stock/search-bar"
-import { useRouter } from "next/navigation"
-
+import SearchBar from "@/components/blocks/SearchBar"
 export default function HomeHero() {
-  const router = useRouter()
-
-  const handleTickerSelect = (ticker) => {
-    router.push(`/t/${ticker}`)
-  }
 
   return (
     <section className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
-      <div className="absolute inset-0 bg-black/25 dark:bg-black/40 z-10" />
-
-      <div className="relative z-20 text-center max-w-4xl mx-auto">
+      <div className="relative text-center max-w-4xl mx-auto">
         <motion.div
           className="space-y-2 mb-6"
           initial={{ opacity: 0, y: 30 }}
@@ -47,7 +38,7 @@ export default function HomeHero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
         >
-          <SearchBar onTickerSelect={handleTickerSelect} className="shadow-2xl shadow-primary/10" />
+          <SearchBar className="shadow-2xl shadow-primary/10" />
         </motion.div>
 
         <motion.p
