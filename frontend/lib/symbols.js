@@ -38,43 +38,54 @@ async function fetchTextWithFallback(urls) {
   return null;
 }
 
+let pendingUsSymbols;
+
 export async function getUsSymbols() {
   const cache = getCache();
   if (cache?.us) return cache.us;
+  if (pendingUsSymbols) return pendingUsSymbols;
 
-  console.time("load_us_symbols");
-  const [nasdaqTxt, otherTxt] = await Promise.all([
-    fetchTextWithFallback(NASDAQ_URLS),
-    fetchTextWithFallback(OTHER_URLS),
-  ]);
-  console.timeEnd("load_us_symbols");
+  pendingUsSymbols = (async () => {
+    console.time("load_us_symbols");
+    const [nasdaqTxt, otherTxt] = await Promise.all([
+      fetchTextWithFallback(NASDAQ_URLS),
+      fetchTextWithFallback(OTHER_URLS),
+    ]);
+    console.timeEnd("load_us_symbols");
 
-  if (!nasdaqTxt || !otherTxt) return null;
+    if (!nasdaqTxt || !otherTxt) return null;
 
-  const map = new Map();
-  nasdaqTxt
-    .trim()
-    .split("\n")
-    .slice(1)
-    .forEach((line) => {
-      const [symbol, name, , test, , , etf] = line.split("|");
-      if (!symbol || test === "Y") return;
-      const type = etf === "Y" ? "etf" : "stock";
-      map.set(symbol, { symbol, name, exchange: "NASDAQ", type });
-    });
-  otherTxt
-    .trim()
-    .split("\n")
-    .slice(1)
-    .forEach((line) => {
-      const [symbol, name, exchange, , etf, , test] = line.split("|");
-      if (!symbol || test === "Y") return;
-      const type = etf === "Y" ? "etf" : "stock";
-      if (!map.has(symbol)) map.set(symbol, { symbol, name, exchange, type });
-    });
-  const arr = Array.from(map.values());
-  setCache({ us: arr });
-  return arr;
+    const map = new Map();
+    nasdaqTxt
+      .trim()
+      .split("\n")
+      .slice(1)
+      .forEach((line) => {
+        const [symbol, name, , test, , , etf] = line.split("|");
+        if (!symbol || test === "Y") return;
+        const type = etf === "Y" ? "etf" : "stock";
+        map.set(symbol, { symbol, name, exchange: "NASDAQ", type });
+      });
+    otherTxt
+      .trim()
+      .split("\n")
+      .slice(1)
+      .forEach((line) => {
+        const [symbol, name, exchange, , etf, , test] = line.split("|");
+        if (!symbol || test === "Y") return;
+        const type = etf === "Y" ? "etf" : "stock";
+        if (!map.has(symbol)) map.set(symbol, { symbol, name, exchange, type });
+      });
+    const arr = Array.from(map.values());
+    setCache({ us: arr });
+    return arr;
+  })();
+
+  try {
+    return await pendingUsSymbols;
+  } finally {
+    pendingUsSymbols = null;
+  }
 }
 
 export async function getCryptoSymbols() {

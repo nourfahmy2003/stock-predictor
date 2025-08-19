@@ -1,28 +1,25 @@
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { API } from "@/lib/api";
 
+const fetcher = (path) =>
+  API(path).then((res) => {
+    if (!res.ok) throw new Error("overview request failed");
+    return res.json();
+  });
+
 export function useOverview(ticker) {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const { data, error, isLoading, mutate } = useSWR(
+    ticker ? `/overview/${ticker}` : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
 
-  const load = async () => {
-    setLoading(true);
-    setErr(null);
-    try {
-      const res = await API(`/overview/${ticker}`);
-      if (!res.ok) throw new Error("overview request failed");
-      setData(await res.json());
-    } catch (e) {
-      setErr(e);
-    } finally {
-      setLoading(false);
-    }
+  return {
+    data,
+    err: error,
+    loading: isLoading,
+    reload: () => mutate(),
   };
-
-  useEffect(() => {
-    if (ticker) load();
-  }, [ticker]);
-
-  return { data, err, loading, reload: load };
 }
+
+

@@ -1,26 +1,38 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { jobs } from "../store"
+import { jobs } from "../store";
 
 export async function GET(req) {
-  const { searchParams } = new URL(req.url)
-  const jobId = searchParams.get("jobId")
-  const job = jobs.get(jobId)
+  const { searchParams } = new URL(req.url);
+  const jobId = searchParams.get("jobId") || "";
+  const job = jobs.get(jobId);
   if (!job) {
-    return Response.json({ pct: 0, state: "error" }, { status: 404 })
+    return new Response(null, { status: 404 });
   }
-  const elapsed = (Date.now() - job.startedAt) / 1000
-  const pct = Math.min(100, Math.floor((elapsed / job.eta) * 100))
-  job.pct = pct
-  if (pct >= 100) {
-    job.state = "done"
-    job.finishedAt = job.finishedAt || Date.now()
-    return Response.json({ pct: 100, state: "done", etaSeconds: 0 })
+
+  if (job.state === "queued") {
+    job.state = "running";
   }
-  job.state = "running"
+  if (job.state === "running") {
+    job.pct = Math.min(job.pct + 20, 100);
+    job.etaSeconds = Math.max((job.etaSeconds || 5) - 1, 0);
+    if (job.pct >= 100) {
+      job.state = "done";
+      job.finishedAt = Date.now();
+      job.result = {
+        forecast: Array.from({ length: job.horizon }, (_, i) => ({
+          step: i + 1,
+          pred_price: 100 + i,
+        })),
+        metrics: { coverage: 0.5 },
+      };
+    }
+  }
+
   return Response.json({
-    pct,
-    state: "running",
-    etaSeconds: Math.max(0, Math.ceil(job.eta - elapsed)),
-  })
+    state: job.state,
+    pct: job.pct,
+    etaSeconds: job.etaSeconds,
+  });
 }
+
