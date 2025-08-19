@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 
-const Spline = dynamic(() => import("@splinetool/react-spline/next"), { ssr: false })
+const Spline = dynamic(() => import("@splinetool/react-spline"), { ssr: false })
 
 export default function GalaxyInteractiveHeroBackground({ children, scene }) {
   const [mounted, setMounted] = useState(false)
