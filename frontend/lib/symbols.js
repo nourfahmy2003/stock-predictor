@@ -11,10 +11,7 @@ const NASDAQ_FILE = process.env.NASDAQ_SYMBOLS_FILE;
 const OTHER_FILE = process.env.OTHERLISTED_SYMBOLS_FILE;
 const FETCH_TIMEOUT = 5000;
 
-async function loadText(url, file) {
-  if (file) {
-    return readFile(file, "utf8");
-  }
+async function loadText(url) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
   try {
@@ -27,41 +24,56 @@ async function loadText(url, file) {
 
 async function getUsSymbols() {
   if (globalThis.__usSymbols) return globalThis.__usSymbols;
+
+  let nasdaqTxt, otherTxt;
   try {
-    const [nasdaqTxt, otherTxt] = await Promise.all([
-      loadText(NASDAQ_URL, NASDAQ_FILE),
-      loadText(OTHER_URL, OTHER_FILE),
+    [nasdaqTxt, otherTxt] = await Promise.all([
+      loadText(NASDAQ_URL),
+      loadText(OTHER_URL),
     ]);
-    const map = new Map();
-    const parseNasdaq = () => {
-      const lines = nasdaqTxt.trim().split("\n").slice(1);
-      for (const line of lines) {
-        const [symbol, name, , test, , , etf] = line.split("|");
-        if (!symbol || test === "Y") continue;
-        const type = etf === "Y" ? "etf" : "stock";
-        map.set(symbol, { symbol, name, exchange: "NASDAQ", type });
-      }
-    };
-    const parseOther = () => {
-      const lines = otherTxt.trim().split("\n").slice(1);
-      for (const line of lines) {
-        const [symbol, name, exchange, , etf, , test] = line.split("|");
-        if (!symbol || test === "Y") continue;
-        const type = etf === "Y" ? "etf" : "stock";
-        if (!map.has(symbol)) {
-          map.set(symbol, { symbol, name, exchange, type });
-        }
-      }
-    };
-    parseNasdaq();
-    parseOther();
-    const arr = Array.from(map.values());
-    globalThis.__usSymbols = arr;
-    return arr;
   } catch (err) {
-    console.error("Failed to fetch US symbols", err);
-    throw new Error("US_SYMBOLS_UNAVAILABLE");
+    if (NASDAQ_FILE && OTHER_FILE) {
+      try {
+        [nasdaqTxt, otherTxt] = await Promise.all([
+          readFile(NASDAQ_FILE, "utf8"),
+          readFile(OTHER_FILE, "utf8"),
+        ]);
+      } catch (fileErr) {
+        console.error("Failed to load US symbols", err, fileErr);
+        throw new Error("US_SYMBOLS_UNAVAILABLE");
+      }
+    } else {
+      console.error("Failed to fetch US symbols", err);
+      throw new Error("US_SYMBOLS_UNAVAILABLE");
+    }
   }
+
+  const map = new Map();
+  const parseNasdaq = () => {
+    const lines = nasdaqTxt.trim().split("\n").slice(1);
+    for (const line of lines) {
+      const [symbol, name, , test, , , etf] = line.split("|");
+      if (!symbol || test === "Y") continue;
+      const type = etf === "Y" ? "etf" : "stock";
+      map.set(symbol, { symbol, name, exchange: "NASDAQ", type });
+    }
+  };
+  const parseOther = () => {
+    const lines = otherTxt.trim().split("\n").slice(1);
+    for (const line of lines) {
+      const [symbol, name, exchange, , etf, , test] = line.split("|");
+      if (!symbol || test === "Y") continue;
+      const type = etf === "Y" ? "etf" : "stock";
+      if (!map.has(symbol)) {
+        map.set(symbol, { symbol, name, exchange, type });
+      }
+    }
+  };
+  parseNasdaq();
+  parseOther();
+  const arr = Array.from(map.values());
+  globalThis.__usSymbols = arr;
+  return arr;
 }
 
 async function getCryptoSymbols() {
