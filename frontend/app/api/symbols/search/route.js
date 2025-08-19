@@ -16,11 +16,13 @@ export async function GET(req) {
   try {
     us = await getUsSymbols();
   } catch (err) {
-    console.error(err);
-    return NextResponse.json(
-      { error: "Unable to load symbols" },
-      { status: 502 }
-    );
+    if (err?.message === "US_SYMBOLS_UNAVAILABLE") {
+      return NextResponse.json(
+        { error: "Unable to load US symbols" },
+        { status: 502 }
+      );
+    }
+    throw err;
   }
   const crypto = await getCryptoSymbols();
   const data = [...us, ...crypto];

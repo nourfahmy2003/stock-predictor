@@ -9,6 +9,12 @@ export async function GET() {
     const headers = { "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400" };
     return NextResponse.json({ items }, { headers });
   } catch (e) {
-    return NextResponse.json({ error: "Failed to load symbols" }, { status: 500 });
+    if (e?.message === "US_SYMBOLS_UNAVAILABLE") {
+      return NextResponse.json(
+        { error: "Unable to load US symbols" },
+        { status: 502 }
+      );
+    }
+    throw e;
   }
 }
