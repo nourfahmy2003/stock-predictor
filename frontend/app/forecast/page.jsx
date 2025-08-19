@@ -1,5 +1,6 @@
-import PredictionPanel from "@/app/components/PredictionPanel"
+import { PredictionPanel } from "@/components/stock/prediction-panel";
 
 export default function ForecastPage() {
-  return <PredictionPanel />
+  // Default ticker for legacy forecast page
+  return <PredictionPanel ticker="AAPL" />;
 }

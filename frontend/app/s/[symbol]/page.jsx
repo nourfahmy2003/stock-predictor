@@ -1,7 +1,7 @@
 import PriceHeader from "@/components/stock/PriceHeader"
 import DayRange from "@/components/stock/DayRange"
 import PriceChart from "@/components/stock/PriceChart"
-import PredictionPanel from "@/app/components/PredictionPanel"
+import { PredictionPanel } from "@/components/stock/prediction-panel"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 async function getData(symbol) {
@@ -29,9 +29,9 @@ export default async function Page({ params }) {
           <DayRange low={quote.dayLow} high={quote.dayHigh} />
         </div>
       </div>
-      <div className="mt-8">
-        <PredictionPanel />
-      </div>
+        <div className="mt-8">
+          <PredictionPanel ticker={symbol} />
+        </div>
     </div>
   )
 }
