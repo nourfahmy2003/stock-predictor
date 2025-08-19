@@ -1,8 +1,9 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { StatCard } from "./stat-card"
-import { TrendingUp, BarChart3 } from "lucide-react"
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "./stat-card";
+import { TrendingUp, BarChart3 } from "lucide-react";
 
 export function BacktestPanel({ ticker }) {
   const backtestResults = {

@@ -1,15 +1,23 @@
-"use client"
+"use client";
 
-import { useState } from 'react'
-import { useParams } from 'next/navigation'
-import { AnimatedTabs } from '@/components/stock/animated-tabs'
-import HeaderPrice from '@/components/stock/HeaderPrice'
-import KpiRow from '@/components/stock/KpiRow'
-import PriceChart from '@/components/stock/PriceChart'
-import LatestHeadlines from '@/components/stock/LatestHeadlines'
-import PredictionPanel from '@/components/stock/prediction-panel'
-import BacktestPanel from '@/components/stock/backtest-panel'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { useState, Suspense } from "react";
+import dynamic from "next/dynamic";
+import { useParams } from "next/navigation";
+import { AnimatedTabs } from "@/components/stock/animated-tabs";
+import HeaderPrice from "@/components/stock/HeaderPrice";
+import KpiRow from "@/components/stock/KpiRow";
+import PriceChart from "@/components/stock/PriceChart";
+import LatestHeadlines from "@/components/stock/LatestHeadlines";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+
+const PredictionPanel = dynamic(
+  () => import("@/components/stock/prediction-panel").then((m) => m.PredictionPanel),
+  { ssr: false }
+);
+const BacktestPanel = dynamic(
+  () => import("@/components/stock/backtest-panel").then((m) => m.BacktestPanel),
+  { ssr: false }
+);
 
 export default function TickerPage() {
   const params = useParams()
@@ -71,9 +79,23 @@ export default function TickerPage() {
 
             {activeTab === 'news' && <LatestHeadlines ticker={ticker} limit={8} />}
 
-            {activeTab === 'predictions' && <PredictionPanel ticker={ticker} />}
+            {activeTab === 'predictions' && (
+              <Suspense
+                fallback={
+                  <div className="text-sm opacity-70">
+                    Running prediction… this can take a few minutes.
+                  </div>
+                }
+              >
+                <PredictionPanel ticker={ticker} />
+              </Suspense>
+            )}
 
-            {activeTab === 'backtest' && <BacktestPanel ticker={ticker} />}
+            {activeTab === 'backtest' && (
+              <Suspense fallback={<div className="text-sm opacity-70">Loading backtest…</div>}>
+                <BacktestPanel ticker={ticker} />
+              </Suspense>
+            )}
 
             {activeTab === 'filings' && (
               <Card>

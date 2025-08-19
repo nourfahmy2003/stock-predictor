@@ -1,39 +1,23 @@
-"use client"
+"use client";
 
-import useSWR from 'swr'
-import { Skeleton } from '@/components/ui/skeleton'
-import { compactNumber, fmtPrice } from '@/lib/format'
-import { useEffect } from 'react'
-import { toast } from 'sonner'
-
-const fetcher = (url) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error('Network error')
-    return r.json()
-  })
+import { Skeleton } from "@/components/ui/skeleton";
+import { compactNumber, fmtPrice } from "@/lib/format";
+import { useOverview } from "@/hooks/use-overview";
 
 export default function KpiRow({ ticker }) {
-  const { data, error, isLoading, mutate } = useSWR(
-    ticker ? `/api/overview/${ticker}` : null,
-    fetcher,
-    { dedupingInterval: 30000, keepPreviousData: true }
-  )
+  const { data, err, loading, reload } = useOverview(ticker);
 
-  useEffect(() => {
-    if (error) toast.error('Failed to load overview')
-  }, [error])
-
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-16 w-full" />
         ))}
       </div>
-    )
+    );
   }
 
-  if (error) {
+  if (err) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-muted-foreground text-sm">
         {['Volume', 'Market Cap', 'P/E Ratio', 'Day Range'].map((k) => (
@@ -42,14 +26,16 @@ export default function KpiRow({ ticker }) {
             <span className="mt-1">—</span>
           </div>
         ))}
-        <button onClick={() => mutate()} className="col-span-2 sm:col-span-4 text-left underline text-xs mt-2">
+        <button onClick={() => reload()} className="col-span-2 sm:col-span-4 text-left underline text-xs mt-2">
           Retry
         </button>
       </div>
-    )
+    );
   }
 
-  const { volume, marketCap, peRatio, dayLow, dayHigh, currency } = data || {}
+  const { volume, marketCap, peRatio, dayRange, currency } = data || {};
+  const dayLow = dayRange?.low;
+  const dayHigh = dayRange?.high;
   const items = [
     { label: 'Volume', value: compactNumber(volume) },
     { label: 'Market Cap', value: compactNumber(marketCap) },
