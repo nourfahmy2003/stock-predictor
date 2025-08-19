@@ -24,9 +24,6 @@ export default function TickerPage() {
     { id: 'backtest', label: 'Backtest' },
   ]
 
-
-export default function TickerPage({ params }) {
-  const ticker = params.ticker?.toUpperCase()
   if (!ticker) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -102,4 +99,3 @@ export default function TickerPage({ params }) {
     </div>
   )
 }
-
