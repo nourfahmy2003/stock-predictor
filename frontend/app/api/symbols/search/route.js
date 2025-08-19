@@ -12,7 +12,17 @@ export async function GET(req) {
   }
   const limit = Math.min(parseInt(searchParams.get("limit") || "200", 10), 200);
   const cursor = parseInt(searchParams.get("cursor") || "0", 10);
-  const [us, crypto] = await Promise.all([getUsSymbols(), getCryptoSymbols()]);
+  let us;
+  try {
+    us = await getUsSymbols();
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json(
+      { error: "Unable to load symbols" },
+      { status: 502 }
+    );
+  }
+  const crypto = await getCryptoSymbols();
   const data = [...us, ...crypto];
   const fuse = new Fuse(data, {
     keys: [

@@ -28,3 +28,15 @@ Continue building your app on:
 2. Deploy your chats from the v0 interface
 3. Changes are automatically pushed to this repository
 4. Vercel deploys the latest version from this repository
+
+## Local Symbol Cache
+
+When developing without external network access, you can point the app to
+cached copies of the NASDAQ and other listed symbol files. Set the following
+environment variables to the file paths of the downloaded CSV files:
+
+- `NASDAQ_SYMBOLS_FILE` – path to `nasdaqtraded.txt`
+- `OTHERLISTED_SYMBOLS_FILE` – path to `otherlisted.txt`
+
+When these variables are present, the API will read from the local files
+instead of fetching them from the internet.
