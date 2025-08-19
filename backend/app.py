@@ -1,8 +1,9 @@
-import os, json, tempfile
+import os, json, tempfile, asyncio, uuid
 import papermill as pm
 import yfinance as yf
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 # Path to your notebook (copy your .ipynb into notebooks/ on the server)
@@ -19,6 +20,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# simple in-memory job store
+jobs: dict[str, dict] = {}
+
+
+async def _run_job(job_id: str, payload: dict):
+    """Background placeholder that marks a job as done."""
+    # replace with actual long-running prediction logic
+    await asyncio.sleep(0)
+    jobs[job_id] = {"state": "done", "result": payload}
+
+
+def create_job(payload: dict) -> str:
+    job_id = uuid.uuid4().hex
+    jobs[job_id] = {"state": "running"}
+    asyncio.create_task(_run_job(job_id, payload))
+    return job_id
+
+
+def get_job_status(job_id: str | None):
+    if job_id is None:
+        return None
+    return jobs.get(job_id)
+
 class ForecastOut(BaseModel):
     ticker: str
     look_back: int
@@ -28,6 +52,25 @@ class ForecastOut(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok", "notebook": NOTEBOOK_PATH}
+
+
+@app.post("/predict")
+async def start_prediction(payload: dict):
+    job_id = create_job(payload)
+    # return camelCase job id for frontend consistency
+    return JSONResponse({"jobId": job_id}, status_code=202)
+
+
+@app.get("/status")
+async def status(req: Request):
+    qp = req.query_params
+    job_id = qp.get("jobId") or qp.get("job_id")
+    if not job_id:
+        raise HTTPException(status_code=400, detail="Missing jobId/job_id")
+    st = get_job_status(job_id)
+    if st is None:
+        raise HTTPException(status_code=404, detail="Unknown jobId")
+    return st
 
 @app.get("/forecast", response_model=ForecastOut)
 def forecast(

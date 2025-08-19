@@ -1,36 +1,35 @@
-"use client"
-import { useEffect } from "react"
-import { usePrediction } from "./prediction-store"
-import PredictionChart from "./PredictionChart"
+"use client";
+import React from "react";
+import { usePrediction } from "@/components/stock/use-prediction-hook";
 
 export function PredictionPanel({ ticker }) {
-  const { active, error, forecast, run } = usePrediction()
+  const { state, result, err, start } = usePrediction(ticker, 60, 10);
 
-  useEffect(() => {
-    if (ticker) run(ticker)
-  }, [ticker])
+  return (
+    <div className="space-y-3">
+      <button
+        onClick={start}
+        disabled={state === "starting" || state === "running"}
+        className="px-4 py-2 rounded-md border bg-zinc-900 text-zinc-100 disabled:opacity-60"
+      >
+        {state === "running" || state === "starting" ? "Running…" : "Run prediction"}
+      </button>
 
-  if (error)
-    return (
-      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
-        {error} <button className="ml-2 underline" onClick={() => run(ticker)}>Retry</button>
-      </div>
-    )
-
-  if (active && active.ticker === ticker)
-    return (
-      <div className="flex h-64 items-center justify-center rounded-xl border border-zinc-800/50 bg-zinc-900/30 p-6 text-zinc-300">
-        <div className="w-full max-w-md">
-          <div className="mb-2 text-center text-sm">Crunching the numbers… this may take a few minutes.</div>
-          <div className="h-2 w-full rounded-full bg-zinc-700/50">
-            <div className="h-2 w-1/3 animate-pulse rounded-full bg-blue-500/70" />
-          </div>
+      {state !== "idle" && (
+        <div className="text-sm opacity-70">
+          {state === "starting" && "Starting job…"}
+          {state === "running" && "Crunching the model — this may take a few minutes…"}
         </div>
-      </div>
-    )
+      )}
 
-  if (!forecast) return null
+      {err && (
+        <div className="text-sm text-red-500">Error: {String(err.message || err)}</div>
+      )}
 
-  return <PredictionChart data={forecast} />
+      {state === "done" && result && (
+        <pre className="text-xs bg-zinc-900/50 p-3 rounded">{JSON.stringify(result, null, 2)}</pre>
+      )}
+    </div>
+  );
 }
 
