@@ -1,12 +1,6 @@
 import { cn } from "@/lib/utils"
 
-interface LoadingSkeletonProps {
-  className?: string
-  variant?: "text" | "circular" | "rectangular"
-  animation?: "pulse" | "wave"
-}
-
-export function LoadingSkeleton({ className, variant = "rectangular", animation = "pulse" }: LoadingSkeletonProps) {
+export function LoadingSkeleton({ className, variant = "rectangular", animation = "pulse" }) {
   return (
     <div
       className={cn(

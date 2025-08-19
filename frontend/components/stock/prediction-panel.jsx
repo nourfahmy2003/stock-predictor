@@ -7,40 +7,24 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, TrendingUp, Brain, Zap } from "lucide-react"
 import { AnimatedCounter } from "./animated-counter"
 import { motion, AnimatePresence } from "framer-motion"
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts"
 
-type ForecastRow = {
-  date: string
-  pred_return: number | null
-  pred_price: number | null
-}
-
-type ForecastResponse = {
-  ticker: string
-  look_back: number
-  horizon: number
-  forecast: ForecastRow[]
-}
-
-interface PredictionPanelProps {
-  ticker: string
-}
-
-export function PredictionPanel({ ticker }: PredictionPanelProps) {
+export function PredictionPanel({ ticker }) {
   const [isTraining, setIsTraining] = useState(false)
-  const [predictions, setPredictions] = useState<
-    | {
-        nextPrice: number
-        confidence: number
-        accuracy: number
-        trend: string
-      }
-    | null
-  >(null)
-  const [forecastData, setForecastData] = useState<ForecastResponse | null>(null)
-  const [status, setStatus] = useState<"idle" | "loading" | "error" | "done">("idle")
-  const [error, setError] = useState<string | null>(null)
-  const [lookBack] = useState<number>(60)
-  const [horizon] = useState<number>(10)
+  const [stats, setStats] = useState(null)
+  const [forecastData, setForecastData] = useState(null)
+  const [status, setStatus] = useState("idle")
+  const [error, setError] = useState(null)
+  const [lookBack] = useState(60)
+  const [horizon] = useState(10)
 
   async function runForecast() {
     const url = `/api/forecast?ticker=${encodeURIComponent(
@@ -56,8 +40,23 @@ export function PredictionPanel({ ticker }: PredictionPanelProps) {
         setError("Request failed")
         return
       }
-      const json: ForecastResponse = await res.json()
+      const json = await res.json()
       setForecastData(json)
+      const series = (json.forecast || [])
+        .filter((r) => r.pred_price != null)
+        .map((r) => ({ date: r.date, price: r.pred_price }))
+      if (series.length) {
+        const last = series[series.length - 1].price
+        const prev = series[series.length - 2]
+          ? series[series.length - 2].price
+          : last
+        const trend =
+          last > prev ? "Uptrend" : last < prev ? "Downtrend" : "Flat"
+        const confidence = Math.round(
+          (series.length / (json.forecast || []).length) * 100
+        )
+        setStats({ nextPrice: last, trend, confidence, series })
+      }
       setStatus("done")
     } catch (e) {
       setStatus("error")
@@ -110,9 +109,8 @@ export function PredictionPanel({ ticker }: PredictionPanelProps) {
             <Button
               onClick={runForecast}
               disabled={status === "loading"}
-              variant="glow"
-              size="xl"
               className="w-full transition-all duration-200"
+              size="lg"
             >
               {status === "loading" ? (
                 <>
@@ -127,16 +125,41 @@ export function PredictionPanel({ ticker }: PredictionPanelProps) {
               )}
             </Button>
 
+            {stats?.series && stats.series.length > 0 && (
+              <div className="mt-6 h-72 w-full">
+                <ResponsiveContainer>
+                  <LineChart data={stats.series}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis domain={["auto", "auto"]} />
+                    <Tooltip />
+                    <Line
+                      type="monotone"
+                      dataKey="price"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
             {forecastData && (
-              <pre className="text-left mt-4 whitespace-pre-wrap">
-                {JSON.stringify(forecastData, null, 2)}
-              </pre>
+              <details className="text-left mt-4">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Raw JSON
+                </summary>
+                <pre className="mt-2 whitespace-pre-wrap">
+                  {JSON.stringify(forecastData, null, 2)}
+                </pre>
+              </details>
             )}
 
             {status === "error" && <p className="text-sm text-danger">{error}</p>}
 
             <AnimatePresence>
-              {predictions && !isTraining && (
+              {stats && !isTraining && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -152,7 +175,7 @@ export function PredictionPanel({ ticker }: PredictionPanelProps) {
                       <CardContent className="p-4 text-center">
                         <div className="text-sm text-muted mb-1">Next Price</div>
                         <div className="text-2xl font-bold text-success font-mono">
-                          $<AnimatedCounter value={predictions.nextPrice} />
+                          $<AnimatedCounter value={stats.nextPrice} />
                         </div>
                       </CardContent>
                     </Card>
@@ -167,7 +190,7 @@ export function PredictionPanel({ ticker }: PredictionPanelProps) {
                       <CardContent className="p-4 text-center">
                         <div className="text-sm text-muted mb-1">Confidence</div>
                         <div className="text-2xl font-bold text-primary font-mono">
-                          <AnimatedCounter value={predictions.confidence} />%
+                          <AnimatedCounter value={stats.confidence} />%
                         </div>
                       </CardContent>
                     </Card>
@@ -177,18 +200,18 @@ export function PredictionPanel({ ticker }: PredictionPanelProps) {
             </AnimatePresence>
 
             <AnimatePresence>
-              {predictions && !isTraining && (
+              {stats && !isTraining && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.6, duration: 0.4 }}
                   className="flex justify-center gap-2 mt-4"
                 >
-                  <Badge variant="outline" className="bg-success/20 text-success border-success/30">
-                    {predictions.accuracy}% Accuracy
-                  </Badge>
                   <Badge variant="outline" className="bg-primary/20 text-primary border-primary/30">
-                    {predictions.trend}
+                    {stats.trend}
+                  </Badge>
+                  <Badge variant="outline" className="bg-success/20 text-success border-success/30">
+                    {stats.confidence}% Confidence
                   </Badge>
                 </motion.div>
               )}

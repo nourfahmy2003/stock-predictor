@@ -2,14 +2,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 
-interface ChartWrapperProps {
-  title?: string
-  children: React.ReactNode
-  className?: string
-  loading?: boolean
-}
-
-const ChartWrapper = React.forwardRef<HTMLDivElement, ChartWrapperProps>(
+const ChartWrapper = React.forwardRef(
   ({ title, children, className, loading = false }, ref) => {
     return (
       <Card ref={ref} className={cn("p-6", className)}>
