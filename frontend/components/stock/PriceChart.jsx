@@ -14,17 +14,19 @@ import {
   ReferenceDot,
 } from "recharts"
 
-const fetcher = (url) => fetch(url).then((r) => {
-  if (!r.ok) throw new Error("Network error")
-  return r.json()
-})
+const fetcher = (url) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error("Network error")
+    return r.json()
+  })
 
 export default function PriceChart({ ticker }) {
   const { theme } = useTheme()
   const reduceMotion = useReducedMotion()
   const { data, error, isLoading, mutate } = useSWR(
-    ticker ? `/api/price/${ticker}` : null,
-    fetcher
+    ticker ? `/api/chart/${ticker}?range=1y&interval=1d` : null,
+    fetcher,
+    { dedupingInterval: 30000, keepPreviousData: true }
   )
 
   if (isLoading) {
@@ -54,7 +56,14 @@ export default function PriceChart({ ticker }) {
   }
 
   const series = data?.series ?? []
-  const prices = series.map((p) => p.close)
+  if (series.length === 0) {
+    return (
+      <div className="h-80 w-full rounded-md border border-border flex items-center justify-center text-sm text-muted-foreground">
+        No chart data
+      </div>
+    )
+  }
+  const prices = series.map((p) => p.c)
   const min = Math.min(...prices)
   const max = Math.max(...prices)
   const pad = (max - min) * 0.02
@@ -73,7 +82,9 @@ export default function PriceChart({ ticker }) {
 
   const formatX = (v) => {
     const d = new Date(v)
-    return isNaN(d) ? v : d.toLocaleDateString(undefined, { month: "short", day: "2-digit" })
+    return isNaN(d)
+      ? v
+      : d.toLocaleDateString(undefined, { month: "short", day: "2-digit" })
   }
 
   return (
@@ -87,7 +98,7 @@ export default function PriceChart({ ticker }) {
             vertical={false}
           />
           <XAxis
-            dataKey="date"
+            dataKey="t"
             tickFormatter={formatX}
             stroke="hsl(var(--muted-foreground))"
             tick={{ fontSize: 12 }}
@@ -112,7 +123,7 @@ export default function PriceChart({ ticker }) {
           />
           <Area
             type="monotone"
-            dataKey="close"
+            dataKey="c"
             stroke="hsl(var(--primary))"
             fill="hsl(var(--primary) / 0.2)"
             strokeWidth={2}
@@ -122,8 +133,8 @@ export default function PriceChart({ ticker }) {
           />
           {last && (
             <ReferenceDot
-              x={last.date}
-              y={last.close}
+              x={last.t}
+              y={last.c}
               r={4}
               fill="hsl(var(--primary))"
               stroke="hsl(var(--background))"
