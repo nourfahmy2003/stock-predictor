@@ -13,13 +13,9 @@ import {
   Tooltip,
   ReferenceDot,
 } from "recharts";
-import { API } from "@/lib/api";
+import { api } from "@/lib/api";
 
-const fetcher = (path) =>
-  API(path).then((r) => {
-    if (!r.ok) throw new Error("Network error");
-    return r.json();
-  });
+const fetcher = (path) => api(path);
 
 export default function PriceChart({ ticker }) {
   const { theme } = useTheme();

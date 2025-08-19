@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { API } from "@/lib/api"
+import { api } from "@/lib/api"
 import { StatCard } from "@/components/ui/stat-card"
 
 export function OverviewSection({ ticker }) {
@@ -12,9 +12,8 @@ export function OverviewSection({ ticker }) {
     setLoading(true)
     setErr(null)
     try {
-      const r = await API(`/overview/${ticker}`)
-      if (!r.ok) throw new Error("overview failed")
-      setData(await r.json())
+      const json = await api(`/overview/${ticker}`)
+      setData(json)
     } catch (e) {
       setErr(e)
     } finally {

@@ -2,7 +2,6 @@ import { Poppins, Inter, Roboto_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
 import Navbar from "@/components/navigation/navbar"
 import "./globals.css"
-import { PredictionStoreProvider } from "@/components/stock/prediction-store"
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -38,10 +37,8 @@ export default function RootLayout({ children }) {
         className={`${poppins.variable} ${inter.variable} ${robotoMono.variable} antialiased bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100`}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <PredictionStoreProvider>
-            <Navbar />
-            <main className="pt-20">{children}</main>
-          </PredictionStoreProvider>
+          <Navbar />
+          <main className="pt-20">{children}</main>
         </ThemeProvider>
       </body>
     </html>
