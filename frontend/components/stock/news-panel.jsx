@@ -25,13 +25,15 @@ export default function NewsPanel({ ticker }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const perPage = 50;
 
   async function load() {
     try {
       setLoading(true);
       setErr(null);
       const json = await api(
-        `/news/${ticker}?range=${range}&analyze=1&max_items=100`
+        `/news/${ticker}?range=${range}&analyze=1&page=${page}&per_page=${perPage}`
       );
       console.log("News API result", json);
       if (json?.items) {
@@ -55,8 +57,10 @@ export default function NewsPanel({ ticker }) {
   useEffect(() => {
     if (ticker) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker, range]);
-
+  }, [ticker, range, page]);
+  useEffect(() => {
+    setPage(1);
+  }, [range, ticker]);
   return (
     <div className="space-y-4 text-zinc-900 dark:text-zinc-100">
       <div className="flex gap-2 flex-wrap">
@@ -90,32 +94,58 @@ export default function NewsPanel({ ticker }) {
       )}
 
       {data?.items?.length > 0 && (
-        <ul className="space-y-3">
-          {data.items.map((it, i) => (
-            <li
-              key={i}
-              className="rounded border border-zinc-800/40 p-3 bg-white/50 dark:bg-zinc-900/30"
-            >
-              <div className="text-xs flex items-center gap-2">
-                <SentimentPill s={it.sentiment} />
-                {it.source && <span className="opacity-70">{it.source}</span>}
-                {it.published && (
-                  <span className="opacity-60">
-                    • {new Date(it.published).toLocaleString()}
-                  </span>
-                )}
-              </div>
-              <a
-                href={it.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block mt-1 hover:underline"
+        <>
+          <ul className="space-y-3">
+            {data.items.map((it, i) => (
+              <li
+                key={i}
+                className="rounded border border-zinc-800/40 p-3 bg-white/50 dark:bg-zinc-900/30"
               >
-                {it.title || "(untitled)"}
-              </a>
-            </li>
-          ))}
-        </ul>
+                <div className="text-xs flex items-center gap-2">
+                  <SentimentPill s={it.sentiment} />
+                  {it.source && <span className="opacity-70">{it.source}</span>}
+                  {it.published && (
+                    <span className="opacity-60">
+                      • {new Date(it.published).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                <a
+                  href={it.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block mt-1 hover:underline"
+                >
+                  {it.title || "(untitled)"}
+                </a>
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex items-center gap-2 pt-4">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1 rounded border border-zinc-700/40 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="text-sm opacity-70">
+              Page {page} of {Math.max(1, Math.ceil((data.total || 0) / perPage))}
+            </span>
+            <button
+              onClick={() =>
+                setPage((p) =>
+                  data && data.total > p * perPage ? p + 1 : p
+                )
+              }
+              disabled={!data || data.total <= page * perPage}
+              className="px-3 py-1 rounded border border-zinc-700/40 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

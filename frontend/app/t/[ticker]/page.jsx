@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { AnimatedTabs } from "@/components/stock/animated-tabs";
 import HeaderPrice from "@/components/stock/HeaderPrice";
 import { OverviewSection } from "@/components/stock/overview-section";
@@ -26,7 +26,13 @@ const NewsPanel = dynamic(
 export default function TickerPage() {
   const params = useParams()
   const ticker = params.ticker?.toString().toUpperCase()
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState('overview')
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab) setActiveTab(tab)
+  }, [searchParams])
 
   const tabs = [
     { id: 'overview', label: 'Overview' },

@@ -13,7 +13,6 @@ HF_TOKEN = os.getenv("HF_TOKEN")  # put your HF token in backend env
 logger = logging.getLogger(__name__)
 
 
-
 def _unwrap_google_news(url: str) -> str:
     qs = parse_qs(urlparse(url).query)
     return qs.get("url", [url])[0]
@@ -43,7 +42,6 @@ def classify_texts_via_api(texts: list[str]) -> list[dict]:
         label = _label_from_scores(scores)
         logger.info("classify %r -> %s -> %s", t, scores, label)
         out.append(label)
-
     return out
 
 
@@ -282,8 +280,9 @@ RANGE_TO_DAYS = {"1w": 7, "1m": 30, "3m": 90, "6m": 180, "9m": 270, "1y": 365}
 def news(
     ticker: str,
     range: str = Query("1w", pattern="^(1w|1m|3m|6m|9m|1y)$"),
-    max_items: int = 100,
     analyze: bool = True,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
 ):
     try:
         days = RANGE_TO_DAYS.get(range, 7)
@@ -308,7 +307,7 @@ def news(
             raise HTTPException(status_code=503, detail="Failed to parse feed")
 
         items = []
-        for entry in feed.entries[:max_items]:
+        for entry in feed.entries:
             link = _unwrap_google_news(entry.get("link", ""))
             src = getattr(entry, "source", None)
             source_name = getattr(src, "title", None) if src else None
@@ -326,9 +325,14 @@ def news(
                 }
             )
 
-        if analyze and items:
-            sentiments = classify_texts_via_api([it["title"] for it in items])
-            for it, s in zip(items, sentiments):
+        items.sort(key=lambda x: x.get("published") or "", reverse=True)
+        total = len(items)
+        start = (page - 1) * per_page
+        paginated = items[start : start + per_page]
+
+        if analyze and paginated:
+            sentiments = classify_texts_via_api([it["title"] for it in paginated])
+            for it, s in zip(paginated, sentiments):
                 it.update(
                     {
                         "sentiment": s["sentiment"],
@@ -337,7 +341,15 @@ def news(
                     }
                 )
 
-        return {"ticker": ticker.upper(), "range": range, "count": len(items), "items": items}
+        return {
+            "ticker": ticker.upper(),
+            "range": range,
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "count": len(paginated),
+            "items": paginated,
+        }
     except HTTPException:
         raise
     except Exception as e:
