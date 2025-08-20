@@ -1,5 +1,5 @@
 # app.py
-import os, json, tempfile, asyncio, uuid, re, time
+import os, json, tempfile, asyncio, uuid, re, time, logging
 import papermill as pm
 import requests, feedparser
 import yfinance as yf
@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 HF_TOKEN = os.getenv("HF_TOKEN")  # put your HF token in backend env
+logger = logging.getLogger(__name__)
+
 
 
 def _unwrap_google_news(url: str) -> str:
@@ -29,6 +31,7 @@ def _label_from_scores(scores):
 def classify_texts_via_api(texts: list[str]) -> list[dict]:
     # If no token, fallback to neutral
     if not HF_TOKEN:
+        logger.info("HF_TOKEN not set; returning neutral sentiments")
         return [{"sentiment": "neutral", "stars": 3, "confidence": 0.0} for _ in texts]
     url = "https://api-inference.huggingface.co/models/tabularisai/multilingual-sentiment-analysis"
     headers = {"Authorization": f"Bearer {HF_TOKEN}"}
@@ -37,7 +40,10 @@ def classify_texts_via_api(texts: list[str]) -> list[dict]:
         r = requests.post(url, headers=headers, json={"inputs": t, "options": {"wait_for_model": True}})
         r.raise_for_status()
         scores = r.json()[0]
-        out.append(_label_from_scores(scores))
+        label = _label_from_scores(scores)
+        logger.info("classify %r -> %s -> %s", t, scores, label)
+        out.append(label)
+
     return out
 
 
@@ -276,7 +282,7 @@ RANGE_TO_DAYS = {"1w": 7, "1m": 30, "3m": 90, "6m": 180, "9m": 270, "1y": 365}
 def news(
     ticker: str,
     range: str = Query("1w", pattern="^(1w|1m|3m|6m|9m|1y)$"),
-    max_items: int = 25,
+    max_items: int = 100,
     analyze: bool = True,
 ):
     try:

@@ -30,7 +30,20 @@ export default function NewsPanel({ ticker }) {
     try {
       setLoading(true);
       setErr(null);
-      const json = await api(`/news/${ticker}?range=${range}&analyze=1`);
+      const json = await api(
+        `/news/${ticker}?range=${range}&analyze=1&max_items=100`
+      );
+      console.log("News API result", json);
+      if (json?.items) {
+        console.log(
+          "Sentiment summary",
+          json.items.map(({ title, sentiment, confidence }) => ({
+            title,
+            sentiment,
+            confidence,
+          }))
+        );
+      }
       setData(json);
     } catch (e) {
       setErr(e);
@@ -95,7 +108,7 @@ export default function NewsPanel({ ticker }) {
               <a
                 href={it.link}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="block mt-1 hover:underline"
               >
                 {it.title || "(untitled)"}
