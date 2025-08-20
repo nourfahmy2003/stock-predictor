@@ -58,11 +58,9 @@ export default function NewsPanel({ ticker }) {
     if (ticker) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, range, page]);
-
   useEffect(() => {
     setPage(1);
   }, [range, ticker]);
-
   return (
     <div className="space-y-4 text-zinc-900 dark:text-zinc-100">
       <div className="flex gap-2 flex-wrap">
