@@ -1,17 +1,16 @@
+# app.py
 import os, json, tempfile, asyncio, uuid
 import papermill as pm
 import yfinance as yf
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-# Path to your notebook (copy your .ipynb into notebooks/ on the server)
 NOTEBOOK_PATH = os.getenv("NOTEBOOK_PATH", "notebooks/Stock_LSTM_10day.ipynb")
 
 app = FastAPI(title="Notebook Runner (Papermill)")
 
-# CORS so your frontend can call this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "https://your-frontend-domain"],
@@ -20,28 +19,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# simple in-memory job store
+
+# in-memory job store
 jobs: dict[str, dict] = {}
 
+# ---------- Shared blocking helper (runs papermill) ----------
+def run_forecast_blocking(ticker: str, look_back: int, horizon: int) -> list[dict]:
+    """Execute the notebook and return the forecast list (list of dicts)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out_nb = os.path.join(tmp, "out.ipynb")
+        out_json = os.path.join(tmp, "forecast.json")
 
-async def _run_job(job_id: str, payload: dict):
-    """Background placeholder that marks a job as done."""
-    # replace with actual long-running prediction logic
-    await asyncio.sleep(0)
-    jobs[job_id] = {"state": "done", "result": payload}
+        params = {
+            "TICKER": ticker,
+            "LOOKBACK": look_back,
+            "HORIZON": horizon,
+            "OUTPUT_JSON": out_json,
+        }
 
+        pm.execute_notebook(
+            NOTEBOOK_PATH,
+            out_nb,
+            parameters=params,
+            kernel_name="python3",
+            progress=False,
+        )
 
-def create_job(payload: dict) -> str:
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"state": "running"}
-    asyncio.create_task(_run_job(job_id, payload))
-    return job_id
+        if not os.path.exists(out_json):
+            raise RuntimeError(
+                "Notebook completed but no OUTPUT_JSON found. "
+                "Did you write forecast_df.to_json(OUTPUT_JSON)?"
+            )
 
+        with open(out_json) as f:
+            data = json.load(f)
 
-def get_job_status(job_id: str | None):
-    if job_id is None:
-        return None
-    return jobs.get(job_id)
+        # Expecting `data` to be a list of {date, pred_price, pred_return, ...}
+        return data
+
+# ---------- Prediction model ----------
+class PredictIn(BaseModel):
+    ticker: str
+    look_back: int = Field(60, ge=10, le=365)
+    horizon: int = Field(10, ge=1, le=60)
 
 class ForecastOut(BaseModel):
     ticker: str
@@ -49,17 +69,47 @@ class ForecastOut(BaseModel):
     horizon: int
     forecast: list
 
+# ---------- Background job ----------
+async def _run_job(job_id: str, payload: PredictIn):
+    try:
+        jobs[job_id] = {"state": "running", "progress": 0}
+        # run the blocking notebook in a worker thread
+        forecast = await asyncio.to_thread(
+            run_forecast_blocking, payload.ticker.upper(), payload.look_back, payload.horizon
+        )
+        jobs[job_id] = {
+            "state": "done",
+            "result": {
+                "ticker": payload.ticker.upper(),
+                "look_back": payload.look_back,
+                "horizon": payload.horizon,
+                "forecast": forecast,
+            },
+        }
+    except Exception as e:
+        jobs[job_id] = {"state": "error", "message": str(e)}
+
+def create_job(payload: PredictIn) -> str:
+    job_id = uuid.uuid4().hex
+    jobs[job_id] = {"state": "queued"}
+    asyncio.create_task(_run_job(job_id, payload))
+    return job_id
+
+def get_job_status(job_id: str | None):
+    if job_id is None:
+        return None
+    return jobs.get(job_id)
+
+# ---------- Routes ----------
 @app.get("/health")
 def health():
     return {"status": "ok", "notebook": NOTEBOOK_PATH}
 
-
 @app.post("/predict")
-async def start_prediction(payload: dict):
+async def start_prediction(payload: PredictIn):
     job_id = create_job(payload)
     # return camelCase job id for frontend consistency
     return JSONResponse({"jobId": job_id}, status_code=202)
-
 
 @app.get("/status")
 async def status(req: Request):
@@ -72,46 +122,19 @@ async def status(req: Request):
         raise HTTPException(status_code=404, detail="Unknown jobId")
     return st
 
+# Synchronous endpoint still available for debugging/manual calls
 @app.get("/forecast", response_model=ForecastOut)
 def forecast(
     ticker: str = Query(..., description="e.g. AAPL or BTC-USD"),
     look_back: int = Query(60, ge=10, le=365),
     horizon: int = Query(10, ge=1, le=60),
 ):
-    # Papermill will parameterize the notebook and execute it
-    with tempfile.TemporaryDirectory() as tmp:
-        out_nb = os.path.join(tmp, "out.ipynb")
-        out_json = os.path.join(tmp, "forecast.json")
-
-        params = {
-            "TICKER": ticker,
-            "LOOKBACK": look_back,
-            "HORIZON": horizon,
-            "OUTPUT_JSON": out_json,
-        }
-
-        try:
-            pm.execute_notebook(
-                NOTEBOOK_PATH,
-                out_nb,
-                parameters=params,
-                kernel_name="python3",
-                progress=False,
-            )
-        except Exception as e:
-            raise HTTPException(500, f"Notebook failed: {e}")
-
-        if not os.path.exists(out_json):
-            raise HTTPException(500, "Notebook completed but no OUTPUT_JSON found. Did you write forecast_df.to_json(OUTPUT_JSON)?")
-
-        with open(out_json) as f:
-            data = json.load(f)
-
-        return ForecastOut(
-            ticker=ticker, look_back=look_back, horizon=horizon, forecast=data
-        )
-
-
+    try:
+        forecast = run_forecast_blocking(ticker.upper(), look_back, horizon)
+        return ForecastOut(ticker=ticker.upper(), look_back=look_back, horizon=horizon, forecast=forecast)
+    except Exception as e:
+        raise HTTPException(500, f"Notebook failed: {e}")
+    
 @app.get("/overview/{ticker}")
 def overview(ticker: str):
     try:
