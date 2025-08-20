@@ -68,6 +68,7 @@ export default function PriceChart({ ticker }) {
   const last = series[series.length - 1]
 
   const tooltipBg = theme === "dark" ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.95)"
+  const axisColor = theme === "dark" ? "#fff" : "#000"
 
   const formatY = (v) =>
     new Intl.NumberFormat("en-US", {
@@ -85,26 +86,29 @@ export default function PriceChart({ ticker }) {
   }
 
   return (
-    <div className="h-80 w-full" aria-live="polite">
+    <div
+      className="h-80 w-full bg-background text-black dark:text-white"
+      aria-live="polite"
+    >
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={series} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+        <AreaChart data={series} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
           <CartesianGrid
-            stroke="hsl(var(--border))"
+            stroke={axisColor}
             strokeDasharray="3 3"
-            opacity={0.3}
+            strokeOpacity={0.1}
             vertical={false}
           />
           <XAxis
             dataKey="date"
             tickFormatter={formatX}
-            stroke="hsl(var(--muted-foreground))"
-            tick={{ fontSize: 12 }}
+            stroke={axisColor}
+            tick={{ fontSize: 12, fill: axisColor, angle: -45, textAnchor: "end" }}
           />
           <YAxis
             domain={domain}
             tickFormatter={formatY}
-            stroke="hsl(var(--muted-foreground))"
-            tick={{ fontSize: 12 }}
+            stroke={axisColor}
+            tick={{ fontSize: 12, fill: axisColor }}
             width={60}
           />
           <Tooltip
@@ -121,8 +125,9 @@ export default function PriceChart({ ticker }) {
           <Area
             type="monotone"
             dataKey="close"
-            stroke="hsl(var(--primary))"
-            fill="hsl(var(--primary) / 0.2)"
+            stroke={axisColor}
+            fill={axisColor}
+            fillOpacity={0.1}
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}
@@ -133,7 +138,7 @@ export default function PriceChart({ ticker }) {
               x={last.date}
               y={last.close}
               r={4}
-              fill="hsl(var(--primary))"
+              fill={axisColor}
               stroke="hsl(var(--background))"
               strokeWidth={1}
             />

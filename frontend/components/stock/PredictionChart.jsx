@@ -12,6 +12,7 @@ import {
   ReferenceLine,
 } from "recharts"
 import { fmtPrice } from "@/lib/format"
+import { useTheme } from "next-themes"
 
 function formatDateShort(s) {
   return new Date(s).toLocaleDateString(undefined, { month: "short", day: "2-digit" })
@@ -36,6 +37,8 @@ function CustomTooltip({ active, payload, label, currency }) {
 }
 
 export default function PredictionChart({ data, currency }) {
+  const { theme } = useTheme()
+  const axisColor = theme === "dark" ? "#fff" : "#000"
   const filtered = data.filter((d) => Number.isFinite(d.pred_price))
   if (filtered.length === 0) {
     return (
@@ -52,44 +55,44 @@ export default function PredictionChart({ data, currency }) {
   const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-72 w-full bg-background text-black dark:text-white">
       <ResponsiveContainer>
-        <LineChart data={filtered} margin={{ top: 24, right: 32, bottom: 24, left: 48 }}>
-          <CartesianGrid strokeOpacity={0.12} vertical={false} />
+        <LineChart data={filtered} margin={{ top: 24, right: 24, bottom: 24, left: 24 }}>
+          <CartesianGrid stroke={axisColor} strokeOpacity={0.1} vertical={false} />
           <XAxis
             dataKey="date"
             tickFormatter={formatDateShort}
             minTickGap={28}
             interval="preserveStartEnd"
-            tick={{ fill: "currentColor" }}
-            stroke="currentColor"
+            tick={{ fill: axisColor, angle: -45, textAnchor: "end" }}
+            stroke={axisColor}
           />
           <YAxis
             domain={domain}
-            tick={{ fill: "currentColor" }}
-            stroke="currentColor"
+            tick={{ fill: axisColor }}
+            stroke={axisColor}
             tickFormatter={(v) => fmtPrice(v, currency)}
           />
           <Tooltip content={<CustomTooltip currency={currency} />} />
           <Line
             dataKey="pred_price"
-            stroke="var(--chart-line)"
+            stroke={axisColor}
             strokeWidth={2}
-            dot={{ r: 3, fill: "var(--chart-dot)" }}
+            dot={{ r: 3, fill: axisColor }}
             activeDot={{ r: 5 }}
             isAnimationActive={!prefersReducedMotion}
           />
-          <ReferenceLine x={first.date} strokeOpacity={0.12} />
-          <ReferenceDot x={first.date} y={first.pred_price} r={4} fill="var(--chart-dot)" />
+          <ReferenceLine x={first.date} stroke={axisColor} strokeOpacity={0.12} />
+          <ReferenceDot x={first.date} y={first.pred_price} r={4} fill={axisColor} />
           <ReferenceDot
             x={last.date}
             y={last.pred_price}
             r={4}
-            fill="var(--chart-dot)"
+            fill={axisColor}
             label={{
               position: "top",
               value: fmtPrice(last.pred_price, currency),
-              fill: "currentColor",
+              fill: axisColor,
             }}
           />
         </LineChart>

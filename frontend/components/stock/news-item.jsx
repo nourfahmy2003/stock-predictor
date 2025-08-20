@@ -38,7 +38,10 @@ export function NewsItem({
   }
 
   return (
-    <motion.div
+    <motion.a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.4, delay: index * 0.1 }}
@@ -46,17 +49,16 @@ export function NewsItem({
     >
       <Card
         className={cn(
-          "glass border-white/20 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/5",
-          "transition-all duration-200 cursor-pointer group",
+          "glass border-white/20 dark:border-white/10 hover:bg-white/10 dark:hover:bg-zinc-700/40",
+          "transition-all duration-200 group",
           className,
         )}
-        onClick={() => url && window.open(url, "_blank")}
         {...props}
       >
-        <CardContent className="p-4">
+        <CardContent className="p-4 text-zinc-900 dark:text-zinc-100">
           <div className="space-y-3">
             <div className="flex items-start justify-between gap-3">
-              <h3 className="font-medium leading-snug text-sm group-hover:text-primary transition-colors line-clamp-2">
+              <h3 className="font-medium leading-snug text-sm text-zinc-900 dark:text-zinc-100 group-hover:text-primary transition-colors line-clamp-2">
                 {headline}
               </h3>
               {url && (
@@ -80,6 +82,6 @@ export function NewsItem({
           </div>
         </CardContent>
       </Card>
-    </motion.div>
+    </motion.a>
   )
 }

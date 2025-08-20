@@ -1,6 +1,6 @@
 // components/stock/prediction-panel.jsx
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import { usePrediction } from "@/components/stock/use-prediction-hook";
 import PredictionChart from "@/components/stock/PredictionChart";
 
@@ -36,24 +36,28 @@ export function PredictionPanel({ ticker, currency = "USD" }) {
   const { state, result, err, start } = usePrediction(ticker, 60, 10);
   const forecast = result?.forecast ?? result ?? [];
 
+  useEffect(() => {
+    if (ticker) start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker]);
+
   return (
     <div className="space-y-4 text-zinc-900 dark:text-zinc-100">
-      {/* Hide the button after success; show when idle/error */}
-      {(state === "idle" || state === "error") && (
+      {(state === "error" || state === "done") && (
         <button
           onClick={start}
-          disabled={state === "starting" || state === "running"}
-          className="px-4 py-2 rounded-md border border-zinc-700 bg-zinc-50 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 disabled:opacity-60"
+          className="px-4 py-2 rounded-md border border-zinc-700 bg-zinc-50 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
         >
-          {state === "starting" ? "Starting…" : "Run prediction"}
+          Re-run prediction
         </button>
       )}
 
-      {state === "running" && (
-        <div className="text-sm opacity-80">
-          Crunching the model — this may take a few minutes…
-        </div>
-      )}
+        {state === "running" && (
+          <div className="flex items-center gap-2 text-sm opacity-80">
+            <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            <span>Crunching the model — this may take a few minutes…</span>
+          </div>
+        )}
 
       {err && <div className="text-sm text-red-500">Error: {String(err.message || err)}</div>}
 
