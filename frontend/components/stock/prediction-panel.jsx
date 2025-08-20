@@ -52,11 +52,12 @@ export function PredictionPanel({ ticker, currency = "USD" }) {
         </button>
       )}
 
-      {state === "running" && (
-        <div className="text-sm opacity-80">
-          Crunching the model — this may take a few minutes…
-        </div>
-      )}
+        {state === "running" && (
+          <div className="flex items-center gap-2 text-sm opacity-80">
+            <div className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            <span>Crunching the model — this may take a few minutes…</span>
+          </div>
+        )}
 
       {err && <div className="text-sm text-red-500">Error: {String(err.message || err)}</div>}
 

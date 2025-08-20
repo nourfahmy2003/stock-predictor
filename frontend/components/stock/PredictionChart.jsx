@@ -52,10 +52,10 @@ export default function PredictionChart({ data, currency }) {
   const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
   return (
-    <div className="h-72 w-full bg-background">
+    <div className="h-72 w-full bg-background text-foreground">
       <ResponsiveContainer>
         <LineChart data={filtered} margin={{ top: 24, right: 32, bottom: 24, left: 48 }}>
-          <CartesianGrid strokeOpacity={0.12} vertical={false} />
+          <CartesianGrid stroke="currentColor" strokeOpacity={0.1} vertical={false} />
           <XAxis
             dataKey="date"
             tickFormatter={formatDateShort}
@@ -73,19 +73,19 @@ export default function PredictionChart({ data, currency }) {
           <Tooltip content={<CustomTooltip currency={currency} />} />
           <Line
             dataKey="pred_price"
-            stroke="var(--chart-line)"
+            stroke="currentColor"
             strokeWidth={2}
-            dot={{ r: 3, fill: "var(--chart-dot)" }}
+            dot={{ r: 3, fill: "currentColor" }}
             activeDot={{ r: 5 }}
             isAnimationActive={!prefersReducedMotion}
           />
           <ReferenceLine x={first.date} strokeOpacity={0.12} />
-          <ReferenceDot x={first.date} y={first.pred_price} r={4} fill="var(--chart-dot)" />
+          <ReferenceDot x={first.date} y={first.pred_price} r={4} fill="currentColor" />
           <ReferenceDot
             x={last.date}
             y={last.pred_price}
             r={4}
-            fill="var(--chart-dot)"
+            fill="currentColor"
             label={{
               position: "top",
               value: fmtPrice(last.pred_price, currency),
