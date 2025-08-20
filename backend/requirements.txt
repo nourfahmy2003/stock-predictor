@@ -11,3 +11,5 @@ scikit-learn
 tensorflow==2.20.0
 pandas-market-calendars
 matplotlib
+feedparser
+requests

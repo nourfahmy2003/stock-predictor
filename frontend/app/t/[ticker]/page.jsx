@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { AnimatedTabs } from "@/components/stock/animated-tabs";
 import HeaderPrice from "@/components/stock/HeaderPrice";
 import { OverviewSection } from "@/components/stock/overview-section";
@@ -18,11 +18,21 @@ const BacktestPanel = dynamic(
   () => import("@/components/stock/backtest-panel").then((m) => m.BacktestPanel),
   { ssr: false }
 );
+const NewsPanel = dynamic(
+  () => import("@/components/stock/news-panel"),
+  { ssr: false }
+);
 
 export default function TickerPage() {
   const params = useParams()
   const ticker = params.ticker?.toString().toUpperCase()
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState('overview')
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab) setActiveTab(tab)
+  }, [searchParams])
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -77,7 +87,7 @@ export default function TickerPage() {
               </div>
             )}
 
-            {activeTab === 'news' && <LatestHeadlines ticker={ticker} limit={8} />}
+            {activeTab === 'news' && <NewsPanel ticker={ticker} />}
 
             {activeTab === 'predictions' && (
               <Suspense

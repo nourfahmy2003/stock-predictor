@@ -1,11 +1,49 @@
 # app.py
-import os, json, tempfile, asyncio, uuid
+import os, json, tempfile, asyncio, uuid, re, time, logging
 import papermill as pm
+import requests, feedparser
 import yfinance as yf
+from urllib.parse import quote_plus, urlparse, parse_qs
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+HF_TOKEN = os.getenv("HF_TOKEN")  # put your HF token in backend env
+logger = logging.getLogger(__name__)
+
+
+def _unwrap_google_news(url: str) -> str:
+    qs = parse_qs(urlparse(url).query)
+    return qs.get("url", [url])[0]
+
+
+def _label_from_scores(scores):
+    # scores is list of {label: '1 star'...'5 stars', score: float}
+    best = max(scores, key=lambda x: x["score"])
+    m = re.search(r"([1-5])", best["label"])
+    stars = int(m.group(1)) if m else 3
+    sentiment = "positive" if stars >= 4 else "negative" if stars <= 2 else "neutral"
+    return {"sentiment": sentiment, "stars": stars, "confidence": float(best["score"])}
+
+
+def classify_texts_via_api(texts: list[str]) -> list[dict]:
+    # If no token, fallback to neutral
+    if not HF_TOKEN:
+        logger.info("HF_TOKEN not set; returning neutral sentiments")
+        return [{"sentiment": "neutral", "stars": 3, "confidence": 0.0} for _ in texts]
+    url = "https://api-inference.huggingface.co/models/tabularisai/multilingual-sentiment-analysis"
+    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+    out = []
+    for t in texts:
+        r = requests.post(url, headers=headers, json={"inputs": t, "options": {"wait_for_model": True}})
+        r.raise_for_status()
+        scores = r.json()[0]
+        label = _label_from_scores(scores)
+        logger.info("classify %r -> %s -> %s", t, scores, label)
+        out.append(label)
+    return out
+
 
 NOTEBOOK_PATH = os.getenv("NOTEBOOK_PATH", "notebooks/Stock_LSTM_10day.ipynb")
 
@@ -232,6 +270,88 @@ def chart(ticker: str, range: str = Query("1y"), interval: str = Query("1d")):
             "interval": interval,
             "series": out,
         }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+RANGE_TO_DAYS = {"1w": 7, "1m": 30, "3m": 90, "6m": 180, "9m": 270, "1y": 365}
+
+
+@app.get("/news/{ticker}")
+def news(
+    ticker: str,
+    range: str = Query("1w", pattern="^(1w|1m|3m|6m|9m|1y)$"),
+    analyze: bool = True,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+):
+    try:
+        days = RANGE_TO_DAYS.get(range, 7)
+
+        # Try to get company name to improve query
+        name = None
+        try:
+            info = (yf.Ticker(ticker.upper()).get_info() or yf.Ticker(ticker.upper()).info)
+            name = info.get("shortName") or info.get("longName")
+        except Exception:
+            pass
+
+        query = f"{name or ticker} OR {ticker} stock"
+        url = (
+            "https://news.google.com/rss/search?"
+            f"q={quote_plus(query + ' when:' + str(days) + 'd')}"
+            "&hl=en-US&gl=US&ceid=US:en"
+        )
+
+        feed = feedparser.parse(url)
+        if feed.bozo:
+            raise HTTPException(status_code=503, detail="Failed to parse feed")
+
+        items = []
+        for entry in feed.entries:
+            link = _unwrap_google_news(entry.get("link", ""))
+            src = getattr(entry, "source", None)
+            source_name = getattr(src, "title", None) if src else None
+            published = (
+                time.strftime("%Y-%m-%dT%H:%M:%SZ", entry.published_parsed)
+                if getattr(entry, "published_parsed", None)
+                else None
+            )
+            items.append(
+                {
+                    "title": entry.get("title", ""),
+                    "link": link,
+                    "source": source_name,
+                    "published": published,
+                }
+            )
+
+        items.sort(key=lambda x: x.get("published") or "", reverse=True)
+        total = len(items)
+        start = (page - 1) * per_page
+        paginated = items[start : start + per_page]
+
+        if analyze and paginated:
+            sentiments = classify_texts_via_api([it["title"] for it in paginated])
+            for it, s in zip(paginated, sentiments):
+                it.update(
+                    {
+                        "sentiment": s["sentiment"],
+                        "confidence": s["confidence"],
+                        "stars": s["stars"],
+                    }
+                )
+
+        return {
+            "ticker": ticker.upper(),
+            "range": range,
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "count": len(paginated),
+            "items": paginated,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 
