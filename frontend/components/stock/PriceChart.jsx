@@ -85,7 +85,7 @@ export default function PriceChart({ ticker }) {
   }
 
   return (
-    <div className="h-80 w-full" aria-live="polite">
+    <div className="h-80 w-full bg-background" aria-live="polite">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={series} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
           <CartesianGrid

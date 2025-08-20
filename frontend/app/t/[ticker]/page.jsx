@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { AnimatedTabs } from "@/components/stock/animated-tabs";
 import HeaderPrice from "@/components/stock/HeaderPrice";
 import { OverviewSection } from "@/components/stock/overview-section";
 import PriceChart from "@/components/stock/PriceChart";
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { api } from "@/lib/api";
 
 const PredictionPanel = dynamic(
   () => import("@/components/stock/prediction-panel").then((m) => m.PredictionPanel),
@@ -18,11 +19,42 @@ const BacktestPanel = dynamic(
   () => import("@/components/stock/backtest-panel").then((m) => m.BacktestPanel),
   { ssr: false }
 );
+const NewsPanel = dynamic(
+  () => import("@/components/stock/news-panel"),
+  { ssr: false }
+);
 
 export default function TickerPage() {
   const params = useParams()
   const ticker = params.ticker?.toString().toUpperCase()
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState('overview')
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab) setActiveTab(tab)
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!ticker) return;
+    async function startPrediction() {
+      try {
+        const body = { ticker, look_back: 60, horizon: 10 };
+        const res = await api(`/predict`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const jobId = res.jobId || res.job_id || res.id;
+        if (jobId) {
+          localStorage.setItem(`predjob:${ticker}`, JSON.stringify({ jobId, startedAt: Date.now() }));
+        }
+      } catch (e) {
+        console.error("failed to start prediction", e);
+      }
+    }
+    startPrediction();
+  }, [ticker]);
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -46,8 +78,8 @@ export default function TickerPage() {
         <HeaderPrice ticker={ticker} />
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="lg:col-span-3">
+      <div className={`grid grid-cols-1 gap-8 ${activeTab !== 'news' ? 'lg:grid-cols-4' : ''}`}>
+        <div className={activeTab !== 'news' ? 'lg:col-span-3' : ''}>
           <AnimatedTabs
             tabs={tabs}
             activeTab={activeTab}
@@ -77,7 +109,7 @@ export default function TickerPage() {
               </div>
             )}
 
-            {activeTab === 'news' && <LatestHeadlines ticker={ticker} limit={8} />}
+            {activeTab === 'news' && <NewsPanel ticker={ticker} />}
 
             {activeTab === 'predictions' && (
               <Suspense
@@ -107,16 +139,18 @@ export default function TickerPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="sticky top-24">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-heading">Latest Headlines</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LatestHeadlines ticker={ticker} />
-            </CardContent>
-          </Card>
-        </div>
+        {activeTab !== 'news' && (
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="sticky top-24">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-heading">Latest Headlines</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LatestHeadlines ticker={ticker} limit={20} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

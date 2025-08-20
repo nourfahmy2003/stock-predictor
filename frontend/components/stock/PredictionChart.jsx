@@ -52,7 +52,7 @@ export default function PredictionChart({ data, currency }) {
   const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-72 w-full bg-background">
       <ResponsiveContainer>
         <LineChart data={filtered} margin={{ top: 24, right: 32, bottom: 24, left: 48 }}>
           <CartesianGrid strokeOpacity={0.12} vertical={false} />
