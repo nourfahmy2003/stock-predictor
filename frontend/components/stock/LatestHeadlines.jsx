@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { NewsList } from "./news-list";
 
-export default function LatestHeadlines({ ticker, limit = 20 }) {
+export default function LatestHeadlines({ ticker, limit = 10 }) {
   const [headlines, setHeadlines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);

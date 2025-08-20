@@ -58,7 +58,6 @@ export default function NewsPanel({ ticker }) {
     if (ticker) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, range, page]);
-
   useEffect(() => {
     setPage(1);
   }, [range, ticker]);
