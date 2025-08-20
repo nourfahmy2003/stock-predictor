@@ -100,7 +100,7 @@ export default function NewsPanel({ ticker }) {
             {data.items.map((it, i) => (
               <li
                 key={i}
-                className="rounded border border-zinc-800/40 p-3 bg-white/50 dark:bg-zinc-900/30"
+                className="rounded border border-zinc-800/40 p-3 bg-card"
               >
                 <div className="text-xs flex items-center gap-2">
                   <SentimentPill s={it.sentiment} />

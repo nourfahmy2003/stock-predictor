@@ -9,6 +9,7 @@ import { OverviewSection } from "@/components/stock/overview-section";
 import PriceChart from "@/components/stock/PriceChart";
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { api } from "@/lib/api";
 
 const PredictionPanel = dynamic(
   () => import("@/components/stock/prediction-panel").then((m) => m.PredictionPanel),
@@ -33,6 +34,27 @@ export default function TickerPage() {
     const tab = searchParams.get('tab')
     if (tab) setActiveTab(tab)
   }, [searchParams])
+
+  useEffect(() => {
+    if (!ticker) return;
+    async function startPrediction() {
+      try {
+        const body = { ticker, look_back: 60, horizon: 10 };
+        const res = await api(`/predict`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const jobId = res.jobId || res.job_id || res.id;
+        if (jobId) {
+          localStorage.setItem(`predjob:${ticker}`, JSON.stringify({ jobId, startedAt: Date.now() }));
+        }
+      } catch (e) {
+        console.error("failed to start prediction", e);
+      }
+    }
+    startPrediction();
+  }, [ticker]);
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
