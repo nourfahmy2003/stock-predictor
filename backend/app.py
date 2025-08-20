@@ -283,6 +283,7 @@ def news(
     analyze: bool = True,
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
+=======
 ):
     try:
         days = RANGE_TO_DAYS.get(range, 7)
