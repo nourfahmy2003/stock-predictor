@@ -88,10 +88,10 @@ function NewsItem({ headline, index }) {
       whileHover={{ x: 4 }}
     >
       <Card className="glass border-white/20 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/5 transition-all duration-200 cursor-pointer group">
-        <CardContent className="p-4">
+        <CardContent className="p-4 text-zinc-900 dark:text-zinc-100">
           <div className="space-y-3">
             <h3
-              className="font-medium group-hover:text-primary transition-colors line-clamp-2"
+              className="font-medium text-zinc-900 dark:text-zinc-100 group-hover:text-primary transition-colors line-clamp-2"
               onClick={() => headline.url && window.open(headline.url, "_blank")}
             >
               {headline.title}
