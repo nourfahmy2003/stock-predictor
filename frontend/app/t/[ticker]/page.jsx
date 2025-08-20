@@ -18,6 +18,10 @@ const BacktestPanel = dynamic(
   () => import("@/components/stock/backtest-panel").then((m) => m.BacktestPanel),
   { ssr: false }
 );
+const NewsPanel = dynamic(
+  () => import("@/components/stock/news-panel"),
+  { ssr: false }
+);
 
 export default function TickerPage() {
   const params = useParams()
@@ -77,7 +81,7 @@ export default function TickerPage() {
               </div>
             )}
 
-            {activeTab === 'news' && <LatestHeadlines ticker={ticker} limit={8} />}
+            {activeTab === 'news' && <NewsPanel ticker={ticker} />}
 
             {activeTab === 'predictions' && (
               <Suspense
