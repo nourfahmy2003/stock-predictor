@@ -3,9 +3,9 @@ import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 
 const ChartWrapper = React.forwardRef(
-  ({ title, children, className, loading = false }, ref) => {
-    return (
-      <Card ref={ref} className={cn("p-6", className)}>
+    ({ title, children, className, loading = false }, ref) => {
+      return (
+        <Card ref={ref} className={cn("p-6 text-foreground", className)}>
         {title && (
           <div className="mb-4">
             <h3 className="text-lg font-heading font-semibold">{title}</h3>

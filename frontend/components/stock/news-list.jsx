@@ -81,19 +81,19 @@ function NewsItem({ headline, index }) {
   }
 
   return (
-    <motion.div
+    <motion.a
+      href={headline.url}
+      target="_blank"
+      rel="noopener noreferrer"
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.4, delay: index * 0.1 }}
       whileHover={{ x: 4 }}
     >
-      <Card className="glass border-white/20 dark:border-white/10 hover:bg-white/10 dark:hover:bg-white/5 transition-all duration-200 cursor-pointer group">
-        <CardContent className="p-4">
+      <Card className="glass border-white/20 dark:border-white/10 hover:bg-white/10 dark:hover:bg-zinc-700/40 transition-all duration-200 group">
+        <CardContent className="p-4 text-zinc-900 dark:text-zinc-100">
           <div className="space-y-3">
-            <h3
-              className="font-medium group-hover:text-primary transition-colors line-clamp-2"
-              onClick={() => headline.url && window.open(headline.url, "_blank")}
-            >
+            <h3 className="font-medium text-zinc-900 dark:text-zinc-100 group-hover:text-primary transition-colors line-clamp-2">
               {headline.title}
             </h3>
 
@@ -120,7 +120,7 @@ function NewsItem({ headline, index }) {
           </div>
         </CardContent>
       </Card>
-    </motion.div>
+    </motion.a>
   )
 }
 
