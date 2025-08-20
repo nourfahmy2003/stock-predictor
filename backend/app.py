@@ -13,6 +13,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")  # put your HF token in backend env
 logger = logging.getLogger(__name__)
 
 
+
 def _unwrap_google_news(url: str) -> str:
     qs = parse_qs(urlparse(url).query)
     return qs.get("url", [url])[0]
@@ -42,6 +43,7 @@ def classify_texts_via_api(texts: list[str]) -> list[dict]:
         label = _label_from_scores(scores)
         logger.info("classify %r -> %s -> %s", t, scores, label)
         out.append(label)
+
     return out
 
 
