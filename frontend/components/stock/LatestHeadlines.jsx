@@ -35,7 +35,7 @@ export default function LatestHeadlines({ ticker, limit = 10 }) {
   }, [ticker, limit]);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 max-h-80 overflow-y-auto">
       {err && (
         <div className="text-sm text-red-500">
           Failed: {String(err.message || err)}

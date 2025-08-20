@@ -56,8 +56,8 @@ export default function TickerPage() {
         <HeaderPrice ticker={ticker} />
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="lg:col-span-3">
+      <div className={`grid grid-cols-1 gap-8 ${activeTab !== 'news' ? 'lg:grid-cols-4' : ''}`}>
+        <div className={activeTab !== 'news' ? 'lg:col-span-3' : ''}>
           <AnimatedTabs
             tabs={tabs}
             activeTab={activeTab}
@@ -117,16 +117,18 @@ export default function TickerPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="sticky top-24">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg font-heading">Latest Headlines</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LatestHeadlines ticker={ticker} />
-            </CardContent>
-          </Card>
-        </div>
+        {activeTab !== 'news' && (
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="sticky top-24">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-heading">Latest Headlines</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LatestHeadlines ticker={ticker} limit={20} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

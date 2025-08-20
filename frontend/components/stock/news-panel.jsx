@@ -26,7 +26,7 @@ export default function NewsPanel({ ticker }) {
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const perPage = 50;
+  const perPage = 20;
 
   async function load() {
     try {
@@ -61,6 +61,7 @@ export default function NewsPanel({ ticker }) {
   useEffect(() => {
     setPage(1);
   }, [range, ticker]);
+
   return (
     <div className="space-y-4 text-zinc-900 dark:text-zinc-100">
       <div className="flex gap-2 flex-wrap">

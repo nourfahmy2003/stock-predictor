@@ -282,7 +282,8 @@ def news(
     range: str = Query("1w", pattern="^(1w|1m|3m|6m|9m|1y)$"),
     analyze: bool = True,
     page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=100),
+    per_page: int = Query(20, ge=1, le=100),
+=======
 ):
     try:
         days = RANGE_TO_DAYS.get(range, 7)
@@ -299,7 +300,7 @@ def news(
         url = (
             "https://news.google.com/rss/search?"
             f"q={quote_plus(query + ' when:' + str(days) + 'd')}"
-            "&hl=en-US&gl=US&ceid=US:en"
+            "&hl=en-US&gl=US&ceid=US:en&num=200"
         )
 
         feed = feedparser.parse(url)

@@ -53,10 +53,10 @@ export function NewsItem({
         onClick={() => url && window.open(url, "_blank")}
         {...props}
       >
-        <CardContent className="p-4">
+        <CardContent className="p-4 text-zinc-900 dark:text-zinc-100">
           <div className="space-y-3">
             <div className="flex items-start justify-between gap-3">
-              <h3 className="font-medium leading-snug text-sm group-hover:text-primary transition-colors line-clamp-2">
+              <h3 className="font-medium leading-snug text-sm text-zinc-900 dark:text-zinc-100 group-hover:text-primary transition-colors line-clamp-2">
                 {headline}
               </h3>
               {url && (
