@@ -60,7 +60,10 @@ def fetch_filing_text(cik: str, accession: str) -> str:
     except Exception:
         pass
 
-    index = sec_fetch(f"{base}/index.json")
+    try:
+        index = sec_fetch(f"{base}/index.json")
+    except Exception as e:
+        raise FileNotFoundError("filing index not found") from e
     items = index.get("directory", {}).get("item", [])
     primary = next(
         (i.get("name") for i in items if str(i.get("type", "")).startswith("text/html")),
@@ -72,7 +75,10 @@ def fetch_filing_text(cik: str, accession: str) -> str:
         raise FileNotFoundError("primary document not found")
 
     html_url = f"{base}/{primary}"
-    html = sec_fetch(html_url, type="text", headers={"Accept": "text/html"})
+    try:
+        html = sec_fetch(html_url, type="text", headers={"Accept": "text/html"})
+    except Exception as e:
+        raise FileNotFoundError("primary document not found") from e
     html = re.sub(r"<(br|BR)\s*/?>", "\n", html)
     html = re.sub(r"</(p|div|tr|h[1-6])>", "\n", html)
     text = re.sub(r"<[^>]+>", " ", html)
