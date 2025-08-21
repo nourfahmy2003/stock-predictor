@@ -66,7 +66,12 @@ def news(
         start = (page - 1) * per_page
         paginated = items[start : start + per_page]
         if analyze and paginated:
-            texts = [extract_article_text(it["link"]) for it in paginated]
+            texts = []
+            for it in paginated:
+                text = extract_article_text(it["link"])
+                print("Extracted article text:", text)
+                # text = it["title"]  # Fallback to title if article text is unsuitable
+                texts.append(text)
             sentiments = classify_texts(texts)
             for it, s in zip(paginated, sentiments):
                 it.update(
