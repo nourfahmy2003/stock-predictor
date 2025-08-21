@@ -1,9 +1,9 @@
-import time
-import feedparser
+from datetime import datetime
 import yfinance as yf
-from urllib.parse import quote_plus
+from dateutil.parser import parse as parse_date
 from fastapi import APIRouter, HTTPException, Query
 from app.utils.google_news import (
+    discover_links,
     _unwrap_google_news,
     _resolve_google_news_article,
     _normalize_amp,
@@ -14,6 +14,7 @@ from app.services.sentiment import classify_texts
 router = APIRouter()
 
 RANGE_TO_DAYS = {"1w": 7, "1m": 30, "3m": 90, "6m": 180, "9m": 270, "1y": 365}
+PREVIEW_LEN = 200
 
 
 @router.get("/news/{ticker}")
@@ -33,47 +34,51 @@ def news(
         except Exception:
             pass
         query = f"{name or ticker} OR {ticker} stock"
-        url = (
-            "https://news.google.com/rss/search?"
-            f"q={quote_plus(query + ' when:' + str(days) + 'd')}"
-            "&hl=en-US&gl=US&ceid=US:en&num=200"
-        )
-        feed = feedparser.parse(url)
-        if feed.bozo:
-            raise HTTPException(status_code=503, detail="Failed to parse feed")
-        items = []
-        for entry in feed.entries:
-            link = _unwrap_google_news(entry.get("link", ""))
+        items = discover_links(query, days)
+        deduped = []
+        seen = set()
+        for it in items:
+            link = _unwrap_google_news(it.get("link", ""))
             link = _resolve_google_news_article(link)
             link = _normalize_amp(link)
-            src = getattr(entry, "source", None)
-            source_name = getattr(src, "title", None) if src else None
-            published = (
-                time.strftime("%Y-%m-%dT%H:%M:%SZ", entry.published_parsed)
-                if getattr(entry, "published_parsed", None)
-                else None
-            )
-            items.append(
-                {
-                    "title": entry.get("title", ""),
-                    "link": link,
-                    "source": source_name,
-                    "published": published,
-                }
-            )
-        items.sort(key=lambda x: x.get("published") or "", reverse=True)
+            if link in seen:
+                continue
+            seen.add(link)
+            it["link"] = link
+            deduped.append(it)
+        items = deduped
+
+        def _parse_pub(pub):
+            try:
+                if isinstance(pub, str):
+                    return parse_date(pub)
+                return pub or datetime.min
+            except Exception:
+                return datetime.min
+
+        items.sort(key=lambda x: _parse_pub(x.get("published")), reverse=True)
         total = len(items)
         start = (page - 1) * per_page
         paginated = items[start : start + per_page]
-        if analyze and paginated:
-            texts = []
-            for it in paginated:
-                text = extract_article_text(it["link"])
-                print("Extracted article text:", text)
-                # text = it["title"]  # Fallback to title if article text is unsuitable
-                texts.append(text)
-            sentiments = classify_texts(texts)
-            for it, s in zip(paginated, sentiments):
+        filtered = []
+        bodies = []
+        for it in paginated:
+            body = extract_article_text(it["link"])
+            if not body:
+                continue
+            if analyze:
+                it.update(
+                    {
+                        "analyzedFrom": "body",
+                        "analyzedTextPreview": body[:PREVIEW_LEN],
+                        "analyzedTextLength": len(body),
+                    }
+                )
+                bodies.append(body)
+            filtered.append(it)
+        if analyze and bodies:
+            sentiments = classify_texts(bodies)
+            for it, s in zip(filtered, sentiments):
                 it.update(
                     {
                         "sentiment": s["sentiment"],
@@ -87,8 +92,8 @@ def news(
             "page": page,
             "per_page": per_page,
             "total": total,
-            "count": len(paginated),
-            "items": paginated,
+            "count": len(filtered),
+            "items": filtered,
         }
     except HTTPException:
         raise

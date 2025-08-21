@@ -1,6 +1,28 @@
 from urllib.parse import parse_qs, urlparse, urlunparse
+from datetime import datetime
+from GoogleNews import GoogleNews
 from app.core.config import session
 
+
+def discover_links(query: str, days: int):
+    gn = GoogleNews(lang="en", region="US", encode="utf-8", period=f"{days}d")
+    gn.clear()
+    gn.search(query)
+    results = gn.result()
+    out = []
+    for r in results:
+        published = r.get("datetime") or r.get("date")
+        if isinstance(published, datetime):
+            published = published.isoformat()
+        out.append(
+            {
+                "title": r.get("title", ""),
+                "link": r.get("link", ""),
+                "source": r.get("media"),
+                "published": published,
+            }
+        )
+    return out
 
 def _unwrap_google_news(url: str) -> str:
     qs = parse_qs(urlparse(url).query)
