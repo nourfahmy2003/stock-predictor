@@ -8,6 +8,7 @@ from app.utils.google_news import (
     _resolve_google_news_article,
     _normalize_amp,
 )
+from app.utils.text import _clean_title
 from app.services.extract import extract_article_text
 from app.services.sentiment import classify_texts
 
@@ -61,7 +62,8 @@ def news(
         start = (page - 1) * per_page
         paginated = items[start : start + per_page]
         filtered = []
-        bodies = []
+        bodies: list[str] = []
+        titles: list[str] = []
         for it in paginated:
             body = extract_article_text(it["link"])
             if not body:
@@ -75,15 +77,20 @@ def news(
                     }
                 )
                 bodies.append(body)
+                titles.append(_clean_title(it.get("title", "")))
             filtered.append(it)
         if analyze and bodies:
-            sentiments = classify_texts(bodies)
-            for it, s in zip(filtered, sentiments):
+            body_sentiments = classify_texts(bodies)
+            title_sentiments = classify_texts(titles)
+            for it, bs, ts in zip(filtered, body_sentiments, title_sentiments):
                 it.update(
                     {
-                        "sentiment": s["sentiment"],
-                        "confidence": s["confidence"],
-                        "stars": s["stars"],
+                        "sentiment": bs["sentiment"],
+                        "confidence": bs["confidence"],
+                        "stars": bs["stars"],
+                        "headlineSentiment": ts["sentiment"],
+                        "headlineConfidence": ts["confidence"],
+                        "headlineStars": ts["stars"],
                     }
                 )
         return {
