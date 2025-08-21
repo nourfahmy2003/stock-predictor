@@ -10,12 +10,12 @@ const fetcher = (path) => api(path);
 export default function FilingViewer({ ticker, filing, onClose }) {
   const [tab, setTab] = useState("highlights");
   const { data: doc } = useSWR(
-    filing ? `/api/filings/${ticker}/doc?accession=${filing.accession}` : null,
+    filing ? `/filings/${ticker}/doc?accession=${filing.accession}` : null,
     fetcher,
     { dedupingInterval: 60_000 }
   );
   const { data: highlights } = useSWR(
-    filing ? `/api/filings/${ticker}/highlights?accession=${filing.accession}` : null,
+    filing ? `/filings/${ticker}/highlights?accession=${filing.accession}` : null,
     fetcher,
     { dedupingInterval: 60_000 }
   );

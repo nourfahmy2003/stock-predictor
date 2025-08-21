@@ -15,12 +15,12 @@ export default function FilingsPanel({ ticker }) {
   const [type, setType] = useState(null);
   const [selected, setSelected] = useState(null);
   const { data: company } = useSWR(
-    ticker ? `/api/filings/${ticker}/company` : null,
+    ticker ? `/filings/${ticker}/company` : null,
     fetcher,
     { dedupingInterval: 60_000 }
   );
   const { data, error, isLoading } = useSWR(
-    ticker ? `/api/filings/${ticker}/list?types=10-K,10-Q,8-K,13F&limit=100` : null,
+    ticker ? `/filings/${ticker}/list?types=10-K,10-Q,8-K,13F&limit=100` : null,
     fetcher,
     { dedupingInterval: 60_000 }
   );
