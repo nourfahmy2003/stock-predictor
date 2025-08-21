@@ -12,3 +12,23 @@ class ForecastOut(BaseModel):
     look_back: int
     horizon: int
     forecast: list
+
+class BacktestPoint(BaseModel):
+    date: str
+    pred: float
+    actual: float
+
+
+class BacktestMetrics(BaseModel):
+    rmse: float
+    mape: float
+    sharpe: float
+    cumulative_return: float
+
+
+class BacktestOut(BaseModel):
+    ticker: str
+    look_back: int
+    horizon: int
+    metrics: BacktestMetrics
+    results: list[BacktestPoint]
