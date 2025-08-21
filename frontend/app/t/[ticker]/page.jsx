@@ -10,6 +10,7 @@ import PriceChart from "@/components/stock/PriceChart";
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
+import FilingsPanel from "@/components/filings/FilingsPanel";
 
 const PredictionPanel = dynamic(
   () => import("@/components/stock/prediction-panel").then((m) => m.PredictionPanel),
@@ -131,8 +132,8 @@ export default function TickerPage() {
 
             {activeTab === 'filings' && (
               <Card>
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  SEC filings data would be displayed here
+                <CardContent className="p-4">
+                  <FilingsPanel ticker={ticker} />
                 </CardContent>
               </Card>
             )}
