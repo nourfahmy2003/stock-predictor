@@ -2,6 +2,7 @@ import os
 import json
 import time
 from pathlib import Path
+import re
 
 import requests
 
@@ -46,3 +47,36 @@ def build_filing_url(cik: str, accession: str, file: str) -> str:
     cik_num = str(int(cik))
     acc_no = accession.replace("-", "")
     return f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{acc_no}/{file}"
+
+
+def fetch_filing_text(cik: str, accession: str) -> str:
+    """Retrieve filing text with .txt -> HTML fallback."""
+    acc_no = accession.replace("-", "")
+    base = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_no}"
+
+    txt_url = f"{base}/{accession}.txt"
+    try:
+        return sec_fetch(txt_url, type="text")
+    except Exception:
+        pass
+
+    index = sec_fetch(f"{base}/index.json")
+    items = index.get("directory", {}).get("item", [])
+    primary = next(
+        (i.get("name") for i in items if str(i.get("type", "")).startswith("text/html")),
+        None,
+    )
+    if not primary and items:
+        primary = items[0].get("name")
+    if not primary:
+        raise FileNotFoundError("primary document not found")
+
+    html_url = f"{base}/{primary}"
+    html = sec_fetch(html_url, type="text", headers={"Accept": "text/html"})
+    html = re.sub(r"<(br|BR)\s*/?>", "\n", html)
+    html = re.sub(r"</(p|div|tr|h[1-6])>", "\n", html)
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\r", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    return text.strip()

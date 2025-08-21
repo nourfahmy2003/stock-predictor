@@ -2,7 +2,13 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 import re
 
-from app.utils.sec import ticker_to_cik, sec_fetch, build_filing_url, sleep
+from app.utils.sec import (
+    ticker_to_cik,
+    sec_fetch,
+    build_filing_url,
+    sleep,
+    fetch_filing_text,
+)
 
 router = APIRouter()
 
@@ -79,26 +85,10 @@ def filing_doc(ticker: str, accession: str = Query(...)):
         cik = ticker_to_cik(ticker)
         if not cik:
             raise HTTPException(status_code=404, detail="CIK not found")
-        data = sec_fetch(f"https://data.sec.gov/submissions/CIK{cik}.json")
-        recent = data.get("filings", {}).get("recent")
-        primary_doc = None
-        if recent:
-            try:
-                idx = recent["accessionNumber"].index(accession)
-                primary_doc = recent["primaryDocument"][idx]
-            except ValueError:
-                pass
         sleep(400)
-        text = None
-        if primary_doc:
-            txt_url = build_filing_url(cik, accession, f"{accession}.txt")
-            try:
-                text = sec_fetch(txt_url, type="text")
-            except Exception:
-                html_url = build_filing_url(cik, accession, primary_doc)
-                html = sec_fetch(html_url, type="text", headers={"Accept": "text/html"})
-                text = re.sub(r"<[^>]+>", " ", html)
-        if not text:
+        try:
+            text = fetch_filing_text(cik, accession)
+        except FileNotFoundError:
             raise HTTPException(status_code=404, detail="document not found")
         return JSONResponse({"text": text}, headers={"Cache-Control": "s-maxage=86400"})
     except HTTPException:
@@ -122,8 +112,8 @@ def highlights(ticker: str, accession: str = Query(...)):
         cik = ticker_to_cik(ticker)
         if not cik:
             raise HTTPException(status_code=404, detail="CIK not found")
-        txt_url = build_filing_url(cik, accession, f"{accession}.txt")
-        text = sec_fetch(txt_url, type="text")
+        text = fetch_filing_text(cik, accession)
+
         res = {
             "mdna": _extract(text, r"management[’'`]?s\s+discussion"),
             "risks": _extract(text, r"risk\s+factors"),
