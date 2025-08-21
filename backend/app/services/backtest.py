@@ -200,3 +200,161 @@ def run_backtest(ticker: str, look_back: int, horizon: int, start_date: str, end
         },
         "results": results,
     }
+
+def simulate_backtest(payload, progress_cb=None):
+    ticker = payload.ticker.upper()
+    period = payload.range
+    interval = payload.interval
+    strat = payload.strategy
+    cash = float(payload.initial_cash)
+    slippage = float(payload.costs.slippage_bps) / 10000.0
+    commission = float(payload.costs.commission_per_trade)
+
+    df = yf.download(ticker, period=period, interval=interval, auto_adjust=True, progress=False)
+    if df.empty:
+        raise ValueError("No data returned")
+    prices = df["Close"].dropna()
+
+    # signals
+    signal = pd.Series(0, index=prices.index)
+    if strat.type == "buy_hold":
+        signal.iloc[0:] = 1
+    elif strat.type == "sma_crossover":
+        fast = strat.params.get("fast", 20)
+        slow = strat.params.get("slow", 50)
+        sma_fast = prices.rolling(fast).mean()
+        sma_slow = prices.rolling(slow).mean()
+        signal = (sma_fast > sma_slow).astype(int)
+        signal = signal.fillna(0)
+    elif strat.type == "rsi":
+        period_r = strat.params.get("period", 14)
+        buy = strat.params.get("buy", 30)
+        sell = strat.params.get("sell", 70)
+        delta = prices.diff()
+        gain = delta.clip(lower=0).rolling(period_r).mean()
+        loss = -delta.clip(upper=0).rolling(period_r).mean()
+        rs = gain / loss.replace(0, np.nan)
+        rsi = 100 - (100 / (1 + rs))
+        sig = pd.Series(np.nan, index=prices.index)
+        sig[rsi < buy] = 1
+        sig[rsi > sell] = 0
+        signal = sig.ffill().fillna(0)
+
+    position = 0
+    shares = 0
+    equity = []
+    drawdown = []
+    trades = []
+    trade_rets = []
+    exposure_days = 0
+    peak = cash
+    entry_price = None
+    entry_qty = None
+
+    for i, (date, price) in enumerate(prices.items()):
+        desired = signal.iat[i]
+        if desired == 1 and position == 0:
+            qty = cash // price
+            if qty > 0:
+                cost = qty * price * (1 + slippage) + commission
+                cash -= cost
+                shares += qty
+                position = 1
+                entry_price = price * (1 + slippage)
+                entry_qty = qty
+                trades.append({"t": date.strftime("%Y-%m-%d"), "side": "buy", "price": float(price), "qty": int(qty)})
+        elif desired == 0 and position == 1:
+            revenue = shares * price * (1 - slippage) - commission
+            cash += revenue
+            pnl_pct = (price * (1 - slippage) - entry_price) / entry_price if entry_price else 0
+            trade_rets.append(pnl_pct)
+            trades.append({
+                "t": date.strftime("%Y-%m-%d"),
+                "side": "sell",
+                "price": float(price),
+                "qty": int(shares),
+                "pnl": float(pnl_pct),
+            })
+            shares = 0
+            position = 0
+            entry_price = None
+            entry_qty = None
+        if position == 1:
+            exposure_days += 1
+        value = cash + shares * price
+        equity.append({"t": date.strftime("%Y-%m-%d"), "value": float(value)})
+        peak = max(peak, value)
+        dd = (value - peak) / peak
+        drawdown.append({"t": date.strftime("%Y-%m-%d"), "dd": float(dd)})
+        if progress_cb:
+            progress_cb((i + 1) / len(prices) * 100)
+
+    # close any open position at last price
+    if position == 1 and shares > 0:
+        price = prices.iloc[-1]
+        revenue = shares * price * (1 - slippage) - commission
+        cash += revenue
+        pnl_pct = (price * (1 - slippage) - entry_price) / entry_price if entry_price else 0
+        trade_rets.append(pnl_pct)
+        trades.append({
+            "t": prices.index[-1].strftime("%Y-%m-%d"),
+            "side": "sell",
+            "price": float(price),
+            "qty": int(shares),
+            "pnl": float(pnl_pct),
+        })
+        shares = 0
+        position = 0
+    value = cash
+    equity[-1]["value"] = float(value)
+
+    eq_df = pd.DataFrame(equity).set_index("t")
+    eq_df.index = pd.to_datetime(eq_df.index)
+    daily_ret = eq_df["value"].pct_change().fillna(0)
+    start_val = float(eq_df["value"].iloc[0])
+    end_val = float(eq_df["value"].iloc[-1])
+    return_pct = (end_val - start_val) / start_val * 100
+    years = (eq_df.index[-1] - eq_df.index[0]).days / 365.25
+    cagr = (end_val / start_val) ** (1 / years) - 1 if years > 0 else 0
+    vol = float(daily_ret.std() * np.sqrt(252))
+    sharpe = float(daily_ret.mean() / (daily_ret.std() + 1e-8) * np.sqrt(252))
+    neg = daily_ret[daily_ret < 0]
+    sortino = float(daily_ret.mean() / (neg.std() + 1e-8) * np.sqrt(252))
+    dd_min = float(min(d["dd"] for d in drawdown)) if drawdown else 0
+    win_trades = [r for r in trade_rets if r > 0]
+    loss_trades = [r for r in trade_rets if r <= 0]
+    win_rate = len(win_trades) / len(trade_rets) if trade_rets else 0
+    avg_win = float(np.mean(win_trades)) if win_trades else 0
+    avg_loss = float(np.mean(loss_trades)) if loss_trades else 0
+    num_trades = len(trade_rets)
+    exposure_pct = exposure_days / len(prices) if len(prices) else 0
+
+    monthly = eq_df["value"].resample("M").last().pct_change().dropna()
+    bar_returns = [
+        {"t": d.strftime("%Y-%m"), "ret": float(r)} for d, r in monthly.items()
+    ]
+
+    metrics = {
+        "startValue": start_val,
+        "endValue": end_val,
+        "returnPct": return_pct,
+        "cagr": float(cagr),
+        "sharpe": sharpe,
+        "sortino": sortino,
+        "volatility": vol,
+        "maxDrawdownPct": dd_min,
+        "winRate": float(win_rate),
+        "avgWin": avg_win,
+        "avgLoss": avg_loss,
+        "numTrades": num_trades,
+        "exposurePct": float(exposure_pct),
+    }
+
+    return {
+        "ticker": ticker,
+        "equity": equity,
+        "drawdown": drawdown,
+        "trades": trades,
+        "barReturns": bar_returns,
+        "metrics": metrics,
+    }
