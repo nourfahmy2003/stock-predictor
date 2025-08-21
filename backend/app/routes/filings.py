@@ -113,6 +113,7 @@ def highlights(ticker: str, accession: str = Query(...)):
         if not cik:
             raise HTTPException(status_code=404, detail="CIK not found")
         text = fetch_filing_text(cik, accession)
+
         res = {
             "mdna": _extract(text, r"management[’'`]?s\s+discussion"),
             "risks": _extract(text, r"risk\s+factors"),
