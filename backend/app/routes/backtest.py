@@ -46,3 +46,4 @@ async def job_result(jobId: str = Query(...)):
     if not st or st.get("state") != "done" or "result" not in st:
         raise HTTPException(404, "Result not ready")
     return st["result"]
+
