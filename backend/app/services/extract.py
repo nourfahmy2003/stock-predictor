@@ -11,4 +11,3 @@ def extract_with_newspaper(url: str, min_chars: int = 300) -> str:
 
 def extract_article_text(url: str) -> str:
     return extract_with_newspaper(url).strip()
-
