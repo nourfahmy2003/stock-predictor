@@ -17,13 +17,32 @@ import { api } from "@/lib/api";
 
 const fetcher = (path) => api(path);
 
+function fmtXLabel(v) {
+  const d = new Date(v);
+  return isNaN(d)
+    ? v
+    : d.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+}
+function fmtXFull(v) {
+  const d = new Date(v);
+  return isNaN(d)
+    ? v
+    : d.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" });
+}
+
 export default function PriceChart({ ticker }) {
   const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
+  const { resolvedTheme } = useTheme();          // <—
+  const isDark = resolvedTheme === "dark";       // <—
+  const axisColor = isDark ? "#ffffff" : "hsl(var(--muted-foreground))";
+  const tickColor = isDark ? "#ffffff" : "hsl(var(--foreground))";
+  const gridColor = isDark ? "rgba(255,255,255,0.15)" : "hsl(var(--border))";
+
   const { data, error, isLoading, mutate } = useSWR(
     ticker ? `/chart/${ticker}?range=1y&interval=1d` : null,
     fetcher,
-    { dedupingInterval: 30000, keepPreviousData: true }
+    { dedupingInterval: 30_000, keepPreviousData: true }
   );
 
   if (isLoading) {
@@ -32,7 +51,7 @@ export default function PriceChart({ ticker }) {
         className="h-80 w-full rounded-md border border-border bg-muted animate-pulse"
         aria-busy="true"
       />
-    )
+    );
   }
 
   if (error) {
@@ -49,7 +68,7 @@ export default function PriceChart({ ticker }) {
           Retry
         </button>
       </div>
-    )
+    );
   }
 
   const series = data?.series ?? [];
@@ -58,16 +77,18 @@ export default function PriceChart({ ticker }) {
       <div className="h-80 w-full rounded-md border border-border flex items-center justify-center text-sm text-muted-foreground">
         No chart data
       </div>
-    )
+    );
   }
-  const prices = series.map((p) => p.close)
-  const min = Math.min(...prices)
-  const max = Math.max(...prices)
-  const pad = (max - min) * 0.02
-  const domain = [min - pad, max + pad]
-  const last = series[series.length - 1]
 
-  const tooltipBg = theme === "dark" ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.95)"
+  const prices = series.map((p) => p.close);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const pad = Math.max((max - min) * 0.02, 0.5); // ensure some breathing room
+  const domain = [min - pad, max + pad];
+  const last = series[series.length - 1];
+
+  const tooltipBg =
+    theme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)";
 
   const formatY = (v) =>
     new Intl.NumberFormat("en-US", {
@@ -75,38 +96,53 @@ export default function PriceChart({ ticker }) {
       currency: "USD",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(v)
-
-  const formatX = (v) => {
-    const d = new Date(v)
-    return isNaN(d)
-      ? v
-      : d.toLocaleDateString(undefined, { month: "short", day: "2-digit" })
-  }
+    }).format(v);
 
   return (
-    <div className="h-80 w-full bg-background" aria-live="polite">
+    <div className="h-80 w-full bg-background text-foreground" aria-live="polite">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={series} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+        <AreaChart
+          data={series}
+          // ✅ equal inner padding (extra bottom for tilted ticks)
+          margin={{ top: 24, right: 24, bottom: 44, left: 24 }}
+        >
+          <defs>
+            {/* visible line/fill in dark mode */}
+            <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.06} />
+            </linearGradient>
+          </defs>
+
           <CartesianGrid
             stroke="hsl(var(--border))"
             strokeDasharray="3 3"
-            opacity={0.3}
+            opacity={0.25}
             vertical={false}
           />
-          <XAxis
+
+           <XAxis
             dataKey="date"
-            tickFormatter={formatX}
-            stroke="hsl(var(--muted-foreground))"
-            tick={{ fontSize: 12 }}
+            tickFormatter={fmtXLabel}
+            tick={{ fill: tickColor, fontSize: 12 }}         // ← white in dark
+            axisLine={{ stroke: axisColor, opacity: 0.35 }}  // ← axis line
+            tickLine={{ stroke: axisColor, opacity: 0.35 }}  // ← small tick marks
+            angle={-25}
+            textAnchor="end"
+            minTickGap={24}
+            tickMargin={8}
+            height={44}
           />
+
           <YAxis
             domain={domain}
             tickFormatter={formatY}
-            stroke="hsl(var(--muted-foreground))"
-            tick={{ fontSize: 12 }}
-            width={60}
+            tick={{ fill: tickColor, fontSize: 12 }}         // ← white in dark
+            axisLine={{ stroke: axisColor, opacity: 0.35 }}
+            tickLine={{ stroke: axisColor, opacity: 0.35 }}
+            width={68}
           />
+
           <Tooltip
             contentStyle={{
               backgroundColor: tooltipBg,
@@ -115,25 +151,27 @@ export default function PriceChart({ ticker }) {
               color: "hsl(var(--foreground))",
               padding: "0.5rem",
             }}
-            labelFormatter={(v) => formatX(v)}
-            formatter={(value) => formatY(value)}
+            labelFormatter={(v) => fmtXFull(v)}
+            formatter={(value) => [formatY(value), "Close"]}
           />
+
           <Area
             type="monotone"
             dataKey="close"
-            stroke="hsl(var(--primary))"
-            fill="hsl(var(--primary) / 0.2)"
+            stroke="#60a5fa"                 // ✅ visible line
             strokeWidth={2}
+            fill="url(#priceFill)"           // soft gradient fill
             dot={false}
             activeDot={{ r: 4 }}
             isAnimationActive={!reduceMotion}
           />
+
           {last && (
             <ReferenceDot
               x={last.date}
               y={last.close}
               r={4}
-              fill="hsl(var(--primary))"
+              fill="#60a5fa"
               stroke="hsl(var(--background))"
               strokeWidth={1}
             />
@@ -141,5 +179,5 @@ export default function PriceChart({ ticker }) {
         </AreaChart>
       </ResponsiveContainer>
     </div>
-  )
+  );
 }
