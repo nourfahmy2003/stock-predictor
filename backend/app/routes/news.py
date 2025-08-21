@@ -2,7 +2,6 @@ from datetime import datetime
 import yfinance as yf
 from dateutil.parser import parse as parse_date
 from fastapi import APIRouter, HTTPException, Query
-
 from app.utils.google_news import (
     discover_links,
     _unwrap_google_news,
