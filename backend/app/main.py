@@ -2,7 +2,7 @@ import asyncio
 import os
 
 from app.core.config import make_app, logger
-from app.routes import forecast, overview, chart, extract, news, filings
+from app.routes import forecast, overview, chart, extract, news, filings, backtest
 from app.services.sentiment import preload
 
 app = make_app()
@@ -13,6 +13,7 @@ app.include_router(chart.router)
 app.include_router(extract.router)
 app.include_router(news.router)
 app.include_router(filings.router)
+app.include_router(backtest.router)
 
 
 @app.on_event("startup")
