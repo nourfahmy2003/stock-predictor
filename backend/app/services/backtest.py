@@ -1,3 +1,7 @@
+# app/services/backtest.py
+from __future__ import annotations
+
+from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -5,7 +9,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
 import tensorflow as tf
 
-# --- helpers copied from notebook ---
+# -------------------------------
+# Data + feature engineering
+# -------------------------------
 
 def fetch_prices(ticker: str, start="2016-01-01", end=None, interval="1d") -> pd.DataFrame:
     df = yf.download(ticker, start=start, end=end, interval=interval, auto_adjust=True, progress=False)
@@ -13,7 +19,6 @@ def fetch_prices(ticker: str, start="2016-01-01", end=None, interval="1d") -> pd
         raise ValueError("No data returned. Check ticker/interval or your network.")
     df.index.name = "Date"
     return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
@@ -63,29 +68,13 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
     return out.dropna()
 
-
 FEATURES = [
-    "Close",
-    "Volume",
-    "log_ret",
-    "ret",
-    "roll_mean_7",
-    "roll_std_7",
-    "roll_mean_21",
-    "roll_std_21",
-    "rsi_14",
-    "macd",
-    "macd_signal",
-    "macd_diff",
-    "bb_width",
-    "ret_lag1",
-    "ret_lag3",
-    "ret_lag5",
-    "vol_7",
-    "vol_21",
-    "z_close_21",
+    "Close","Volume","log_ret","ret",
+    "roll_mean_7","roll_std_7","roll_mean_21","roll_std_21",
+    "rsi_14","macd","macd_signal","macd_diff",
+    "bb_width","ret_lag1","ret_lag3","ret_lag5",
+    "vol_7","vol_21","z_close_21",
 ]
-
 
 def make_windows(X: np.ndarray, y: np.ndarray, lookback: int, horizon: int):
     xs, ys = [], []
@@ -93,7 +82,6 @@ def make_windows(X: np.ndarray, y: np.ndarray, lookback: int, horizon: int):
         xs.append(X[i - lookback : i, :])
         ys.append(y[i : i + horizon])
     return np.array(xs, dtype="float32"), np.array(ys, dtype="float32")
-
 
 def build_model(input_steps: int, n_features: int, horizon: int) -> tf.keras.Model:
     inp = tf.keras.Input(shape=(input_steps, n_features))
@@ -107,6 +95,9 @@ def build_model(input_steps: int, n_features: int, horizon: int) -> tf.keras.Mod
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss="mse")
     return model
 
+# -------------------------------
+# Sliding-window LSTM backtest (legacy)
+# -------------------------------
 
 def run_backtest(ticker: str, look_back: int, horizon: int, start_date: str, end_date: str | None = None):
     raw = fetch_prices(ticker, start=start_date, end=end_date)
@@ -125,7 +116,8 @@ def run_backtest(ticker: str, look_back: int, horizon: int, start_date: str, end
 
     max_windows = 50
     start_idx = look_back
-    while start_idx + horizon <= len(df) and len(results) / horizon < max_windows:
+    # safer guard
+    while (start_idx + horizon) <= len(df) and (len(results) // max(1, horizon)) < max_windows:
         train_X_df = X_df.iloc[:start_idx]
         train_y = y[:start_idx]
 
@@ -138,17 +130,8 @@ def run_backtest(ticker: str, look_back: int, horizon: int, start_date: str, end
         if len(X_train_w) == 0:
             break
         model = build_model(look_back, X_train_w.shape[2], horizon)
-        cbs = [
-            tf.keras.callbacks.EarlyStopping(monitor="loss", patience=5, restore_best_weights=True)
-        ]
-        model.fit(
-            X_train_w,
-            y_train_w,
-            epochs=20,
-            batch_size=32,
-            verbose=0,
-            callbacks=cbs,
-        )
+        cbs = [tf.keras.callbacks.EarlyStopping(monitor="loss", patience=5, restore_best_weights=True)]
+        model.fit(X_train_w, y_train_w, epochs=20, batch_size=32, verbose=0, callbacks=cbs)
 
         last_block_raw = train_X_df.values[-look_back:]
         last_block = scaler_X.transform(last_block_raw).reshape(1, look_back, X_train_w.shape[2])
@@ -201,8 +184,12 @@ def run_backtest(ticker: str, look_back: int, horizon: int, start_date: str, end
         "results": results,
     }
 
+# -------------------------------
+# Strategy backtester (job flow)
+# -------------------------------
 
 def simulate_backtest(payload, progress_cb=None):
+    """No imports from app.schemas here to avoid circular imports; payload has attributes used below."""
     ticker = payload.ticker.upper()
     period = payload.range
     interval = payload.interval
@@ -250,7 +237,6 @@ def simulate_backtest(payload, progress_cb=None):
     exposure_days = 0
     peak = cash
     entry_price = None
-    entry_qty = None
 
     for i, (date, price) in enumerate(prices.items()):
         desired = signal.iat[i]
@@ -262,24 +248,17 @@ def simulate_backtest(payload, progress_cb=None):
                 shares += qty
                 position = 1
                 entry_price = price * (1 + slippage)
-                entry_qty = qty
                 trades.append({"t": date.strftime("%Y-%m-%d"), "side": "buy", "price": float(price), "qty": int(qty)})
         elif desired == 0 and position == 1:
             revenue = shares * price * (1 - slippage) - commission
             cash += revenue
             pnl_pct = (price * (1 - slippage) - entry_price) / entry_price if entry_price else 0
             trade_rets.append(pnl_pct)
-            trades.append({
-                "t": date.strftime("%Y-%m-%d"),
-                "side": "sell",
-                "price": float(price),
-                "qty": int(shares),
-                "pnl": float(pnl_pct),
-            })
+            trades.append({"t": date.strftime("%Y-%m-%d"), "side": "sell", "price": float(price), "qty": int(shares), "pnl": float(pnl_pct)})
             shares = 0
             position = 0
             entry_price = None
-            entry_qty = None
+
         if position == 1:
             exposure_days += 1
         value = cash + shares * price
@@ -297,13 +276,7 @@ def simulate_backtest(payload, progress_cb=None):
         cash += revenue
         pnl_pct = (price * (1 - slippage) - entry_price) / entry_price if entry_price else 0
         trade_rets.append(pnl_pct)
-        trades.append({
-            "t": prices.index[-1].strftime("%Y-%m-%d"),
-            "side": "sell",
-            "price": float(price),
-            "qty": int(shares),
-            "pnl": float(pnl_pct),
-        })
+        trades.append({"t": prices.index[-1].strftime("%Y-%m-%d"), "side": "sell", "price": float(price), "qty": int(shares), "pnl": float(pnl_pct)})
         shares = 0
         position = 0
     value = cash
@@ -331,24 +304,13 @@ def simulate_backtest(payload, progress_cb=None):
     exposure_pct = exposure_days / len(prices) if len(prices) else 0
 
     monthly = eq_df["value"].resample("M").last().pct_change().dropna()
-    bar_returns = [
-        {"t": d.strftime("%Y-%m"), "ret": float(r)} for d, r in monthly.items()
-    ]
+    bar_returns = [{"t": d.strftime("%Y-%m"), "ret": float(r)} for d, r in monthly.items()]
 
     metrics = {
-        "startValue": start_val,
-        "endValue": end_val,
-        "returnPct": return_pct,
-        "cagr": float(cagr),
-        "sharpe": sharpe,
-        "sortino": sortino,
-        "volatility": vol,
-        "maxDrawdownPct": dd_min,
-        "winRate": float(win_rate),
-        "avgWin": avg_win,
-        "avgLoss": avg_loss,
-        "numTrades": num_trades,
-        "exposurePct": float(exposure_pct),
+        "startValue": start_val, "endValue": end_val, "returnPct": return_pct, "cagr": float(cagr),
+        "sharpe": sharpe, "sortino": sortino, "volatility": vol, "maxDrawdownPct": dd_min,
+        "winRate": float(win_rate), "avgWin": avg_win, "avgLoss": avg_loss,
+        "numTrades": num_trades, "exposurePct": float(exposure_pct),
     }
 
     return {
@@ -358,4 +320,110 @@ def simulate_backtest(payload, progress_cb=None):
         "trades": trades,
         "barReturns": bar_returns,
         "metrics": metrics,
+    }
+
+# -------------------------------
+# Simple 90→10 “accuracy” backtest
+# -------------------------------
+
+def run_backtest_last(ticker: str, look_back: int = 90, horizon: int = 10):
+    # 1) Overfetch plenty of calendar days; yfinance will drop non-trading days for equities
+    start_date = (datetime.utcnow() - timedelta(days=look_back + horizon + 320)).strftime("%Y-%m-%d")
+    raw = fetch_prices(ticker, start=start_date, end=None)
+    df = add_features(raw)
+    df["target_ret"] = df["log_ret"].shift(-1)
+    df = df.dropna()
+
+    # 2) Must have at least look_back + 2 rows (one to predict from, at least one to evaluate)
+    min_needed = max(look_back + 2, horizon + 2)
+    if len(df) < min_needed:
+        raise ValueError(f"Not enough data: need ≥{min_needed} rows, got {len(df)}")
+
+    # 3) Train on everything up to the last H rows (but cap H to available rows)
+    #    If there are fewer than 'horizon' rows at the end, shrink horizon to fit.
+    max_h = min(horizon, len(df) - look_back - 1)
+    if max_h < 1:
+        # fallback: train on all but last row, predict 1
+        max_h = 1
+    horizon = int(max_h)
+
+    start_idx = len(df) - horizon  # first evaluation index
+    X_df = df[FEATURES].astype("float32")
+    y = df["target_ret"].astype("float32").values
+    dates = df.index
+
+    # 4) Ensure the training block has at least 'look_back' rows; if not, shrink look_back.
+    if start_idx < look_back:
+        look_back = int(max(2, start_idx))
+    train_X_df = X_df.iloc[:start_idx]
+    train_y = y[:start_idx]
+
+    scaler_X = StandardScaler().fit(train_X_df.values)
+    scaler_y = StandardScaler().fit(train_y.reshape(-1, 1))
+
+    X_train = scaler_X.transform(train_X_df.values)
+    y_train_s = scaler_y.transform(train_y.reshape(-1, 1)).ravel()
+
+    X_train_w, y_train_w = make_windows(X_train, y_train_s, look_back, horizon)
+    if len(X_train_w) == 0:
+        raise ValueError("Not enough windows for training after safety caps")
+
+    model = build_model(look_back, X_train_w.shape[2], horizon)
+    cbs = [tf.keras.callbacks.EarlyStopping(monitor="loss", patience=6, restore_best_weights=True)]
+    model.fit(X_train_w, y_train_w, epochs=24, batch_size=32, verbose=0, callbacks=cbs)
+
+    # 5) Predict from the last look_back training rows
+    last_block_raw = train_X_df.values[-look_back:]
+    last_block = scaler_X.transform(last_block_raw).reshape(1, look_back, X_train_w.shape[2])
+    next_ret_s = model.predict(last_block, verbose=0)[0]                # shape (horizon,)
+    next_ret = scaler_y.inverse_transform(next_ret_s.reshape(-1, 1)).ravel()
+
+    last_price = float(df["Close"].iloc[start_idx - 1])
+    # 6) Ensure pred length == actual length by explicit capping
+    actual_prices = df["Close"].iloc[start_idx : start_idx + horizon].values.astype("float64")
+    horizon = int(min(horizon, len(actual_prices)))
+    next_ret = next_ret[:horizon]
+
+    pred_prices = last_price * np.exp(np.cumsum(next_ret))              # shape (horizon,)
+
+    # 7) Build results (length-safe)
+    results = []
+    preds, actuals, strategy_returns = [], [], []
+    prev_price = last_price
+    for j in range(horizon):
+        date = dates[start_idx + j].strftime("%Y-%m-%d")
+        pred_price = float(pred_prices[j])
+        actual_price = float(actual_prices[j])
+        results.append({"date": date, "pred": pred_price, "actual": actual_price})
+        preds.append(pred_price)
+        actuals.append(actual_price)
+        if j == 0:
+            actual_return = (actual_price - prev_price) / (prev_price or 1.0)
+            pred_return = (pred_price - prev_price) / (prev_price or 1.0)
+            strategy_returns.append(np.sign(pred_return) * actual_return)
+
+    # 8) Metrics on the evaluation window
+    y_true = np.array(actuals, dtype="float64")
+    y_pred = np.array(preds, dtype="float64")
+    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
+    mape = float(mean_absolute_percentage_error(y_true, y_pred) * 100.0)
+    if strategy_returns:
+        sr = np.array(strategy_returns, dtype="float64")
+        sharpe = float(sr.mean() / (sr.std() + 1e-8) * np.sqrt(252))
+        cumulative_return = float(np.prod(1 + sr) - 1)
+    else:
+        sharpe = 0.0
+        cumulative_return = 0.0
+
+    return {
+        "ticker": ticker.upper(),
+        "look_back": int(look_back),
+        "horizon": int(horizon),
+        "metrics": {
+            "rmse": rmse,
+            "mape": mape,
+            "sharpe": sharpe,
+            "cumulative_return": cumulative_return,
+        },
+        "results": results,
     }

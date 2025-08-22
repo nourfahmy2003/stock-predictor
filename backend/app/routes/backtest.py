@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from app.schemas import BacktestRunIn, BacktestStatus, BacktestResult
-from app.services.backtest import simulate_backtest, run_backtest
+from app.services.backtest import simulate_backtest, run_backtest, run_backtest_last
 
 router = APIRouter()
 
@@ -62,3 +62,17 @@ async def lstm_backtest(
     except Exception as e:
         raise HTTPException(400, str(e))
     return result
+
+
+@router.get("/backtest/accuracy")
+async def accuracy_backtest(
+    ticker: str,
+    look_back: int = Query(90, ge=30, le=240),
+    horizon: int = Query(10, ge=1, le=30),
+):
+    try:
+        result = await asyncio.to_thread(run_backtest_last, ticker, look_back, horizon)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return result
+
