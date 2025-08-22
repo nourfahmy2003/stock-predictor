@@ -201,6 +201,7 @@ def run_backtest(ticker: str, look_back: int, horizon: int, start_date: str, end
         "results": results,
     }
 
+
 def simulate_backtest(payload, progress_cb=None):
     ticker = payload.ticker.upper()
     period = payload.range

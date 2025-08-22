@@ -110,3 +110,4 @@ class BacktestStatus(BaseModel):
     pct: int = 0
     etaSeconds: Optional[int] = None
     message: Optional[str] = None
+

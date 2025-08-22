@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from app.schemas import BacktestRunIn, BacktestStatus, BacktestResult
-from app.services.backtest import simulate_backtest
+from app.services.backtest import simulate_backtest, run_backtest
 
 router = APIRouter()
 
@@ -47,3 +47,18 @@ async def job_result(jobId: str = Query(...)):
         raise HTTPException(404, "Result not ready")
     return st["result"]
 
+@router.get("/backtest")
+async def lstm_backtest(
+    ticker: str,
+    look_back: int = Query(..., ge=10, le=240),
+    horizon: int = Query(..., ge=1, le=30),
+    start: str = Query(...),
+    end: str | None = None,
+):
+    try:
+        result = await asyncio.to_thread(
+            run_backtest, ticker, look_back, horizon, start, end
+        )
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return result
