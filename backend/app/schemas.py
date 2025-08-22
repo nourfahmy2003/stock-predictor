@@ -8,11 +8,23 @@ class PredictIn(BaseModel):
     horizon: int = Field(10, ge=1, le=60)
 
 
+class ForecastPoint(BaseModel):
+    date: str
+    actual: float | None = None
+    pred_back: float | None = None
+    pred_fore: float | None = None
+
+
+class ForecastPayload(BaseModel):
+    metrics: dict
+    series: list[ForecastPoint]
+
+
 class ForecastOut(BaseModel):
     ticker: str
     look_back: int
     horizon: int
-    forecast: list
+    forecast: ForecastPayload
 
 
 # --- legacy LSTM backtest schemas ---

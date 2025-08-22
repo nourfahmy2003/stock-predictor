@@ -19,12 +19,18 @@ export async function GET(req) {
     if (job.pct >= 100) {
       job.state = "done";
       job.finishedAt = Date.now();
+      const start = Date.now();
       job.result = {
-        forecast: Array.from({ length: job.horizon }, (_, i) => ({
-          step: i + 1,
-          pred_price: 100 + i,
-        })),
-        metrics: { coverage: 0.5 },
+        ticker: job.ticker,
+        look_back: job.look_back,
+        horizon: job.horizon,
+        forecast: {
+          metrics: { coverage: 0.5 },
+          series: Array.from({ length: job.horizon }, (_, i) => ({
+            date: new Date(start + i * 86400000).toISOString().slice(0, 10),
+            pred_fore: 100 + i,
+          })),
+        },
       };
     }
   }

@@ -11,22 +11,28 @@ from fastapi.responses import JSONResponse
 from app.schemas import PredictIn, ForecastOut
 from app.services.sentiment import MODEL_ID
 
-NOTEBOOK_PATH = os.getenv("NOTEBOOK_PATH", "notebooks/Stock_LSTM_10day.ipynb")
+# Default notebook path now points to unified backtest+forecast notebook
+NOTEBOOK_PATH = os.getenv("NOTEBOOK_PATH", "notebooks/LSTM-10day.ipynb")
 
 router = APIRouter()
 
 jobs: dict[str, dict] = {}
 
 
-def run_forecast_blocking(ticker: str, look_back: int, horizon: int) -> list[dict]:
+def run_forecast_blocking(ticker: str, look_back: int, horizon: int) -> dict:
+    """Execute the unified backtest/forecast notebook and return its JSON payload."""
     with tempfile.TemporaryDirectory() as tmp:
         out_nb = os.path.join(tmp, "out.ipynb")
         out_json = os.path.join(tmp, "forecast.json")
         params = {
             "TICKER": ticker,
+            # Fixed context/backtest settings to match notebook defaults
+            "CONTEXT": 100,
             "LOOKBACK": look_back,
-            "HORIZON": horizon,
-            "OUTPUT_JSON": out_json,
+            "H_BACK": 20,
+            "H_FORE": horizon,
+            "SAVE_JSON": True,
+            "OUT_JSON": out_json,
         }
         pm.execute_notebook(
             NOTEBOOK_PATH,
@@ -37,8 +43,8 @@ def run_forecast_blocking(ticker: str, look_back: int, horizon: int) -> list[dic
         )
         if not os.path.exists(out_json):
             raise RuntimeError(
-                "Notebook completed but OUTPUT_JSON not found. "
-                "Make sure the notebook writes forecast_df.to_json(OUTPUT_JSON)"
+                "Notebook completed but OUT_JSON not found. "
+                "Ensure the notebook writes the combined payload to OUT_JSON"
             )
         with open(out_json) as f:
             return json.load(f)

@@ -10,7 +10,7 @@ stock-forecast-backend/
 ├─ requirements.txt
 ├─ Dockerfile
 └─ notebooks/
-   └─ Stock_LSTM_10day.ipynb  # <- copy your notebook here
+   └─ LSTM-10day.ipynb  # <- copy your notebook here
 ```
 
 ## Notebook requirements
@@ -20,15 +20,19 @@ Add a **parameters** cell in your notebook:
 ```python
 # parameters
 TICKER = "AAPL"
+CONTEXT = 100
 LOOKBACK = 60
-HORIZON = 10
-OUTPUT_JSON = "forecast.json"
+H_BACK = 20
+H_FORE = 10
+OUT_JSON = "forecast.json"
 ```
 
 At the end of your notebook, after you build `forecast_df` (with columns `date`, `pred_return`, `pred_price`), write:
 
 ```python
-forecast_df.to_json(OUTPUT_JSON, orient="records", date_format="iso")
+import json
+with open(OUT_JSON, "w") as f:
+    json.dump(payload, f)
 ```
 
 ## Local run
@@ -48,7 +52,7 @@ curl "http://localhost:8000/forecast?ticker=AAPL&look_back=60&horizon=10"
 ```bash
 docker build -t stock-forecast-backend .
 docker run -p 8000:8000 \
-  -e NOTEBOOK_PATH=notebooks/Stock_LSTM_10day.ipynb \
+  -e NOTEBOOK_PATH=notebooks/LSTM-10day.ipynb \
   --name stock-api stock-forecast-backend
 ```
 
@@ -65,7 +69,7 @@ docker run -p 8000:8000 \
    ```bash
    docker build -t stock-forecast-backend .
    docker run -d --restart unless-stopped -p 8000:8000 \
-     -e NOTEBOOK_PATH=notebooks/Stock_LSTM_10day.ipynb \
+     -e NOTEBOOK_PATH=notebooks/LSTM-10day.ipynb \
      --name stock-api stock-forecast-backend
    ```
 5. Test from your machine:

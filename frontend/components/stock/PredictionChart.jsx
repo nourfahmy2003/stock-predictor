@@ -8,8 +8,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ReferenceDot,
-  ReferenceLine,
 } from "recharts"
 import { fmtPrice } from "@/lib/format"
 
@@ -19,6 +17,8 @@ function formatDateShort(s) {
 
 function CustomTooltip({ active, payload, label, currency }) {
   if (!active || !payload || !payload.length) return null
+  const val = payload.find((p) => Number.isFinite(p.value))?.value
+  if (!Number.isFinite(val)) return null
   const isDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
   const style = {
     backgroundColor: isDark ? "rgba(0,0,0,0.9)" : "#fff",
@@ -30,26 +30,33 @@ function CustomTooltip({ active, payload, label, currency }) {
   return (
     <div style={style}>
       <div>{new Date(label).toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" })}</div>
-      <div>{fmtPrice(payload[0].value, currency)}</div>
+      <div>{fmtPrice(val, currency)}</div>
     </div>
   )
 }
 
 export default function PredictionChart({ data, currency }) {
-  const filtered = data.filter((d) => Number.isFinite(d.pred_price))
+  const filtered = data.filter(
+    (d) =>
+      Number.isFinite(d.actual) ||
+      Number.isFinite(d.pred_back) ||
+      Number.isFinite(d.pred_fore)
+  )
   if (filtered.length === 0) {
     return (
       <div className="h-72 flex items-center justify-center text-muted-foreground">No forecast yet</div>
     )
   }
-  const prices = filtered.map((d) => d.pred_price)
+  const prices = filtered.flatMap((d) =>
+    [d.actual, d.pred_back, d.pred_fore].filter(Number.isFinite)
+  )
   const min = Math.min(...prices)
   const max = Math.max(...prices)
   const pad = Math.max((max - min) * 0.02, 0.5)
   const domain = [min - pad, max + pad]
-  const first = filtered[0]
-  const last = filtered[filtered.length - 1]
-  const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
   return (
     <div className="h-72 w-full bg-background">
@@ -72,25 +79,26 @@ export default function PredictionChart({ data, currency }) {
           />
           <Tooltip content={<CustomTooltip currency={currency} />} />
           <Line
-            dataKey="pred_price"
-            stroke="var(--chart-line)"
+            dataKey="actual"
+            stroke="currentColor"
             strokeWidth={2}
-            dot={{ r: 3, fill: "var(--chart-dot)" }}
-            activeDot={{ r: 5 }}
+            dot={false}
             isAnimationActive={!prefersReducedMotion}
           />
-          <ReferenceLine x={first.date} strokeOpacity={0.12} />
-          <ReferenceDot x={first.date} y={first.pred_price} r={4} fill="var(--chart-dot)" />
-          <ReferenceDot
-            x={last.date}
-            y={last.pred_price}
-            r={4}
-            fill="var(--chart-dot)"
-            label={{
-              position: "top",
-              value: fmtPrice(last.pred_price, currency),
-              fill: "currentColor",
-            }}
+          <Line
+            dataKey="pred_back"
+            stroke="var(--chart-line)"
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={!prefersReducedMotion}
+          />
+          <Line
+            dataKey="pred_fore"
+            stroke="var(--chart-forecast, var(--chart-line))"
+            strokeWidth={2}
+            strokeDasharray="4 4"
+            dot={false}
+            isAnimationActive={!prefersReducedMotion}
           />
         </LineChart>
       </ResponsiveContainer>
