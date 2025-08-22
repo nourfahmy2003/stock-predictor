@@ -14,7 +14,6 @@ import {
 
 import { MetricBox } from "@/components/stock/metric-box";
 import { ChartWrapper } from "@/components/stock/chart-wrapper";
-
 export function BacktestTab({ ticker }) {
   const { theme } = useTheme();
   const [lookBack, setLookBack] = useState(60);

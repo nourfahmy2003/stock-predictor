@@ -47,7 +47,6 @@ async def job_result(jobId: str = Query(...)):
         raise HTTPException(404, "Result not ready")
     return st["result"]
 
-
 @router.get("/backtest")
 async def lstm_backtest(
     ticker: str,
