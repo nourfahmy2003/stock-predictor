@@ -106,21 +106,12 @@ export default function PredictionPanel({ ticker }) {
               </div>
               <DayRange disabled value={backtestHorizon + horizon} />
             </div>
-            <ChartWrapper title="">
-              <PredictionChart data={series} />
-            </ChartWrapper>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              <StatCard
-                title="Typical prediction error"
-                value={`$${avgAbsErr.toFixed(2)}`}
-                description="over last 20 days"
-              />
-              <StatCard
-                title="Directional accuracy"
-                value={`${directionalAcc.toFixed(1)}%`}
-                description="over last 20 days"
-              />
-            </div>
+              <ChartWrapper
+                title="Price: Actual vs 10-Day Prediction"
+                subtitle="Showing last 20 days + next 10 days"
+              >
+                <PredictionChart data={series} />
+              </ChartWrapper>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <StatCard
                 title="Typical prediction error"
