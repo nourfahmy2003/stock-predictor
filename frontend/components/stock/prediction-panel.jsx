@@ -6,6 +6,7 @@ import { MetricBox } from "@/components/stock/metric-box";
 import { ChartWrapper } from "@/components/stock/chart-wrapper";
 import DayRange from "@/components/stock/DayRange";
 import PredictionChart from "./PredictionChart";
+import { StatCard } from "@/components/stock/stat-card";
 import { usePrediction } from "./use-prediction-hook";
 
 export default function PredictionPanel({ ticker }) {
@@ -17,8 +18,46 @@ export default function PredictionPanel({ ticker }) {
   const { state, result, err } = usePrediction(ticker, { lookBack, context, backtestHorizon, horizon });
   const loading = state === "loading";
 
-  const series = useMemo(() => result?.forecast || [], [result]);
   const metrics = result?.metrics || {};
+  const series = useMemo(() => {
+    const raw = result?.forecast || [];
+    return raw
+      .filter((r) => r.part !== "context")
+      .map((r) => {
+        let accuracy = null;
+        if (Number.isFinite(r.pred) && Number.isFinite(r.actual)) {
+          const denom = r.actual === 0 ? 1 : r.actual;
+          const pctErr = Math.abs((r.pred - r.actual) / denom) * 100;
+          accuracy = 100 - pctErr;
+        }
+        return { ...r, accuracy };
+      });
+  }, [result]);
+
+  const backtestRows = useMemo(
+    () => series.filter((r) => r.part === "backtest" && r.accuracy !== null),
+    [series]
+  );
+  const avgAbsErr =
+    backtestRows.length > 0
+      ? backtestRows.reduce((s, r) => s + Math.abs(r.pred - r.actual), 0) /
+        backtestRows.length
+      : 0;
+  const meanPctErr =
+    backtestRows.length > 0
+      ?
+          backtestRows.reduce(
+            (s, r) =>
+              s +
+              Math.abs(
+                (r.pred - r.actual) / (r.actual === 0 ? 1 : r.actual)
+              ) * 100,
+            0
+          ) /
+        backtestRows.length
+      : 0;
+  const avgAccuracy = backtestRows.length > 0 ? 100 - meanPctErr : 0;
+  const directionalAcc = metrics.accuracy_pct || 0;
 
   return (
     <div className="space-y-6 relative">
@@ -42,23 +81,45 @@ export default function PredictionPanel({ ticker }) {
       {result && (
         <div className="space-y-6" aria-live="polite">
           {/* Friendly KPIs for general users */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricBox label="Accuracy (direction)" value={(metrics.accuracy_pct || 0).toFixed(1)} format="percentage" />
-            <MetricBox label="MAPE (backtest)" value={(metrics.mape || 0).toFixed(2)} format="percentage" />
-            <MetricBox label="Expected 10-day move" value={(metrics.expected_10d_move_pct || 0).toFixed(2)} format="percentage" />
-            <MetricBox label="RMSE (backtest)" value={(metrics.rmse || 0).toFixed(2)} format="number" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+            <MetricBox
+              label="Avg 20-day Accuracy"
+              value={avgAccuracy.toFixed(1)}
+              format="percentage"
+            />
+            <MetricBox
+              label="Average Absolute Error"
+              value={Number(avgAbsErr.toFixed(2))}
+              format="currency"
+            />
+            <MetricBox
+              label="Mean % Error"
+              value={meanPctErr.toFixed(2)}
+              format="percentage"
+            />
           </div>
 
           <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="font-heading font-medium">Last {context} days + backtest {backtestHorizon}d + forecast {horizon}d</div>
-              <DayRange disabled value={context} />
+              <div className="font-heading font-medium">
+                Backtest {backtestHorizon}d + forecast {horizon}d
+              </div>
+              <DayRange disabled value={backtestHorizon + horizon} />
             </div>
             <ChartWrapper title="">
               <PredictionChart data={series} />
             </ChartWrapper>
-            <div className="text-xs text-muted-foreground mt-3">
-              Orange = model prediction; Blue = actual. “Backtest” segment shows one-step predictions on the last {backtestHorizon} sessions.
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <StatCard
+                title="Typical prediction error"
+                value={`$${avgAbsErr.toFixed(2)}`}
+                description="over last 20 days"
+              />
+              <StatCard
+                title="Directional accuracy"
+                value={`${directionalAcc.toFixed(1)}%`}
+                description="over last 20 days"
+              />
             </div>
           </Card>
         </div>
