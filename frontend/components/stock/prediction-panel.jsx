@@ -121,6 +121,18 @@ export default function PredictionPanel({ ticker }) {
                 description="over last 20 days"
               />
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <StatCard
+                title="Typical prediction error"
+                value={`$${avgAbsErr.toFixed(2)}`}
+                description="over last 20 days"
+              />
+              <StatCard
+                title="Directional accuracy"
+                value={`${directionalAcc.toFixed(1)}%`}
+                description="over last 20 days"
+              />
+            </div>
           </Card>
         </div>
       )}
