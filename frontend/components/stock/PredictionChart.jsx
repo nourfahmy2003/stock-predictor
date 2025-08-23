@@ -1,99 +1,34 @@
-"use client"
+"use client";
+import { useTheme } from "next-themes";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceDot,
-  ReferenceLine,
-} from "recharts"
-import { fmtPrice } from "@/lib/format"
+export default function PredictionChart({ data }) {
+  const { theme } = useTheme();
+  const axisColor = theme === "dark" ? "#fff" : "hsl(var(--foreground))";
+  const tooltipBg = theme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)";
 
-function formatDateShort(s) {
-  return new Date(s).toLocaleDateString(undefined, { month: "short", day: "2-digit" })
-}
-
-function CustomTooltip({ active, payload, label, currency }) {
-  if (!active || !payload || !payload.length) return null
-  const isDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
-  const style = {
-    backgroundColor: isDark ? "rgba(0,0,0,0.9)" : "#fff",
-    color: isDark ? "#fff" : "#000",
-    border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-    padding: "0.5rem",
-    borderRadius: "0.25rem",
-  }
-  return (
-    <div style={style}>
-      <div>{new Date(label).toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" })}</div>
-      <div>{fmtPrice(payload[0].value, currency)}</div>
-    </div>
-  )
-}
-
-export default function PredictionChart({ data, currency }) {
-  const filtered = data.filter((d) => Number.isFinite(d.pred_price))
-  if (filtered.length === 0) {
-    return (
-      <div className="h-72 flex items-center justify-center text-muted-foreground">No forecast yet</div>
-    )
-  }
-  const prices = filtered.map((d) => d.pred_price)
-  const min = Math.min(...prices)
-  const max = Math.max(...prices)
-  const pad = Math.max((max - min) * 0.02, 0.5)
-  const domain = [min - pad, max + pad]
-  const first = filtered[0]
-  const last = filtered[filtered.length - 1]
-  const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  // Compute Y domain with a small pad
+  const prices = (data || []).flatMap(d => [d.actual, d.pred]).filter(v => Number.isFinite(v));
+  const lo = prices.length ? Math.min(...prices) : 0;
+  const hi = prices.length ? Math.max(...prices) : 1;
+  const pad = Math.max((hi - lo) * 0.02, 0.5);
+  const domain = [lo - pad, hi + pad];
 
   return (
-    <div className="h-72 w-full bg-background">
-      <ResponsiveContainer>
-        <LineChart data={filtered} margin={{ top: 24, right: 32, bottom: 24, left: 48 }}>
-          <CartesianGrid strokeOpacity={0.12} vertical={false} />
-          <XAxis
-            dataKey="date"
-            tickFormatter={formatDateShort}
-            minTickGap={28}
-            interval="preserveStartEnd"
-            tick={{ fill: "currentColor" }}
-            stroke="currentColor"
-          />
-          <YAxis
-            domain={domain}
-            tick={{ fill: "currentColor" }}
-            stroke="currentColor"
-            tickFormatter={(v) => fmtPrice(v, currency)}
-          />
-          <Tooltip content={<CustomTooltip currency={currency} />} />
-          <Line
-            dataKey="pred_price"
-            stroke="var(--chart-line)"
-            strokeWidth={2}
-            dot={{ r: 3, fill: "var(--chart-dot)" }}
-            activeDot={{ r: 5 }}
-            isAnimationActive={!prefersReducedMotion}
-          />
-          <ReferenceLine x={first.date} strokeOpacity={0.12} />
-          <ReferenceDot x={first.date} y={first.pred_price} r={4} fill="var(--chart-dot)" />
-          <ReferenceDot
-            x={last.date}
-            y={last.pred_price}
-            r={4}
-            fill="var(--chart-dot)"
-            label={{
-              position: "top",
-              value: fmtPrice(last.pred_price, currency),
-              fill: "currentColor",
-            }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  )
+    <ResponsiveContainer width="100%" height={340}>
+      <LineChart data={data || []} margin={{ top: 24, right: 24, bottom: 24, left: 48 }}>
+        <CartesianGrid strokeOpacity={0.12} stroke="hsl(var(--border))" />
+        <XAxis dataKey="date" tick={{ fill: axisColor }} interval="preserveStartEnd" />
+        <YAxis domain={domain} tick={{ fill: axisColor }} />
+        <Tooltip
+          contentStyle={{ backgroundColor: tooltipBg, border: "1px solid hsl(var(--border))" }}
+          formatter={(v, name) => [`$${Number(v).toFixed(2)}`, name === "actual" ? "Actual" : "Predicted"]}
+        />
+        {/* actual */}
+        <Line dataKey="actual" stroke="hsl(var(--chart-line, var(--primary)))" dot={false} strokeWidth={2} />
+        {/* predicted */}
+        <Line dataKey="pred" stroke="#f97316" dot={false} strokeWidth={2} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
 }

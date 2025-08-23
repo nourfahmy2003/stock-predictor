@@ -12,10 +12,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import FilingsPanel from "@/components/filings/FilingsPanel";
 
-const PredictionPanel = dynamic(
-  () => import("@/components/stock/prediction-panel").then((m) => m.PredictionPanel),
-  { ssr: false }
-);
+const PredictionPanel = dynamic(() => import("@/components/stock/prediction-panel"), { ssr: false });
+
 const BacktestPanel = dynamic(
   () => import("@/components/stock/backtest-panel").then((m) => m.BacktestPanel),
   { ssr: false }

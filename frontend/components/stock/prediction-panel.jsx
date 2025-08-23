@@ -1,70 +1,68 @@
-// components/stock/prediction-panel.jsx
 "use client";
-import React, { useEffect } from "react";
-import { usePrediction } from "@/components/stock/use-prediction-hook";
-import PredictionChart from "@/components/stock/PredictionChart";
+import { useMemo } from "react";
+import { BarChart3 } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { MetricBox } from "@/components/stock/metric-box";
+import { ChartWrapper } from "@/components/stock/chart-wrapper";
+import DayRange from "@/components/stock/DayRange";
+import PredictionChart from "./PredictionChart";
+import { usePrediction } from "./use-prediction-hook";
 
-function ForecastTable({ forecast = [] }) {
-  if (!forecast?.length) return <div className="text-sm opacity-70">No forecast returned.</div>;
-  return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-700/40">
-      <table className="min-w-full text-sm">
-        <thead className="bg-zinc-900/50">
-          <tr className="text-left">
-            <th className="px-3 py-2">Date</th>
-            <th className="px-3 py-2">Pred. Price</th>
-            <th className="px-3 py-2">Pred. Return</th>
-          </tr>
-        </thead>
-        <tbody>
-          {forecast.map((r) => (
-            <tr key={r.date} className="border-t border-zinc-800/50">
-              <td className="px-3 py-2">{r.date}</td>
-              <td className="px-3 py-2">{r.pred_price?.toFixed?.(2) ?? "—"}</td>
-              <td className="px-3 py-2">
-                {r.pred_return != null ? (r.pred_return * 100).toFixed(2) + "%" : "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+export default function PredictionPanel({ ticker }) {
+  const lookBack = 60;
+  const context = 100;
+  const backtestHorizon = 20;
+  const horizon = 10;
 
-export function PredictionPanel({ ticker, currency = "USD" }) {
-  const { state, result, err, start } = usePrediction(ticker, 60, 10);
-  const forecast = result?.forecast ?? result ?? [];
+  const { state, result, err } = usePrediction(ticker, { lookBack, context, backtestHorizon, horizon });
+  const loading = state === "loading";
 
-  useEffect(() => {
-    if (ticker) start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker]);
+  const series = useMemo(() => result?.forecast || [], [result]);
+  const metrics = result?.metrics || {};
 
   return (
-    <div className="space-y-4 text-zinc-900 dark:text-zinc-100">
-      {(state === "error" || state === "done") && (
-        <button
-          onClick={start}
-          className="px-4 py-2 rounded-md border border-zinc-700 bg-zinc-50 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100"
-        >
-          Re-run prediction
-        </button>
-      )}
-
-      {state === "running" && (
-        <div className="text-sm opacity-80">
-          Crunching the model — this may take a few minutes…
+    <div className="space-y-6 relative">
+      {loading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="text-sm text-foreground">Running LSTM notebook…</div>
         </div>
       )}
 
-      {err && <div className="text-sm text-red-500">Error: {String(err.message || err)}</div>}
+      <div className="flex items-center gap-2">
+        <BarChart3 className="size-5 text-primary" />
+        <h3 className="text-lg font-heading font-semibold">Prediction & Accuracy (LSTM)</h3>
+      </div>
 
-      {/* Chart first */}
-      {!!forecast.length && <PredictionChart data={forecast} currency={currency} />}
+      {err && <div className="text-sm text-red-500">{String(err.message || err)}</div>}
 
-      {/* Keep table below as a numeric view (optional) */}
-      {/* {!!forecast.length && <ForecastTable forecast={forecast} />} */}
+      {!loading && !result && !err && (
+        <div className="text-sm text-muted-foreground">No prediction yet.</div>
+      )}
+
+      {result && (
+        <div className="space-y-6" aria-live="polite">
+          {/* Friendly KPIs for general users */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricBox label="Accuracy (direction)" value={(metrics.accuracy_pct || 0).toFixed(1)} format="percentage" />
+            <MetricBox label="MAPE (backtest)" value={(metrics.mape || 0).toFixed(2)} format="percentage" />
+            <MetricBox label="Expected 10-day move" value={(metrics.expected_10d_move_pct || 0).toFixed(2)} format="percentage" />
+            <MetricBox label="RMSE (backtest)" value={(metrics.rmse || 0).toFixed(2)} format="number" />
+          </div>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-heading font-medium">Last {context} days + backtest {backtestHorizon}d + forecast {horizon}d</div>
+              <DayRange disabled value={context} />
+            </div>
+            <ChartWrapper title="">
+              <PredictionChart data={series} />
+            </ChartWrapper>
+            <div className="text-xs text-muted-foreground mt-3">
+              Orange = model prediction; Blue = actual. “Backtest” segment shows one-step predictions on the last {backtestHorizon} sessions.
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
