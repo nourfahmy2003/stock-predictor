@@ -1,14 +1,19 @@
-import * as React from "react"
-import { cn } from "@/lib/utils"
-import { Card } from "@/components/ui/card"
+import * as React from "react";
+import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
 
 const ChartWrapper = React.forwardRef(
-  ({ title, children, className, loading = false }, ref) => {
+  ({ title, subtitle, children, className, loading = false }, ref) => {
     return (
       <Card ref={ref} className={cn("p-6", className)}>
-        {title && (
+        {(title || subtitle) && (
           <div className="mb-4">
-            <h3 className="text-lg font-heading font-semibold">{title}</h3>
+            {title && (
+              <h3 className="text-lg font-heading font-semibold">{title}</h3>
+            )}
+            {subtitle && (
+              <p className="text-sm text-muted-foreground">{subtitle}</p>
+            )}
           </div>
         )}
         <div className="relative">
@@ -20,13 +25,13 @@ const ChartWrapper = React.forwardRef(
               </div>
             </div>
           )}
-          <div className="min-h-[300px] w-full">{children}</div>
+          <div className="min-h-[320px] w-full">{children}</div>
         </div>
       </Card>
-    )
-  },
-)
+    );
+  }
+);
 
-ChartWrapper.displayName = "ChartWrapper"
+ChartWrapper.displayName = "ChartWrapper";
 
-export { ChartWrapper }
+export { ChartWrapper };
