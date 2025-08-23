@@ -85,7 +85,6 @@ export default function PredictionChart({ data }) {
     }
     return null;
   };
-
   const forecastStart = series.find((d) => d.part === "forecast")?.date;
   const lineWidth = isSmall ? 2.5 : 3;
   const fontSize = isSmall ? 10 : 12;
