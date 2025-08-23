@@ -21,15 +21,17 @@ export default function PredictionPanel({ ticker }) {
   const metrics = result?.metrics || {};
   const series = useMemo(() => {
     const raw = result?.forecast || [];
-    return raw.map((r) => {
-      let accuracy = null;
-      if (Number.isFinite(r.pred) && Number.isFinite(r.actual)) {
-        const denom = r.actual === 0 ? 1 : r.actual;
-        const pctErr = Math.abs((r.pred - r.actual) / denom) * 100;
-        accuracy = 100 - pctErr;
-      }
-      return { ...r, accuracy };
-    });
+    return raw
+      .filter((r) => r.part !== "context")
+      .map((r) => {
+        let accuracy = null;
+        if (Number.isFinite(r.pred) && Number.isFinite(r.actual)) {
+          const denom = r.actual === 0 ? 1 : r.actual;
+          const pctErr = Math.abs((r.pred - r.actual) / denom) * 100;
+          accuracy = 100 - pctErr;
+        }
+        return { ...r, accuracy };
+      });
   }, [result]);
 
   const backtestRows = useMemo(
@@ -100,15 +102,24 @@ export default function PredictionPanel({ ticker }) {
           <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="font-heading font-medium">
-                Last {context} days + backtest {backtestHorizon}d + forecast {horizon}d
+                Backtest {backtestHorizon}d + forecast {horizon}d
               </div>
-              <DayRange disabled value={context} />
+              <DayRange disabled value={backtestHorizon + horizon} />
             </div>
             <ChartWrapper title="">
               <PredictionChart data={series} />
             </ChartWrapper>
-            <div className="text-xs text-muted-foreground mt-3">
-              Orange = model prediction; Blue = actual. “Backtest” segment shows one-step predictions on the last {backtestHorizon} sessions.
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <StatCard
+                title="Typical prediction error"
+                value={`$${avgAbsErr.toFixed(2)}`}
+                description="over last 20 days"
+              />
+              <StatCard
+                title="Directional accuracy"
+                value={`${directionalAcc.toFixed(1)}%`}
+                description="over last 20 days"
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <StatCard

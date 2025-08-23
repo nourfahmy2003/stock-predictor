@@ -16,7 +16,9 @@ export default function PredictionChart({ data }) {
   const axisColor = theme === "dark" ? "#fff" : "hsl(var(--foreground))";
   const tooltipBg = theme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)";
 
-  const prices = (data || [])
+  const series = (data || []).filter((d) => d.part !== "context");
+
+  const prices = series
     .flatMap((d) => [d.actual, d.pred])
     .filter((v) => Number.isFinite(v));
   const max = prices.length ? Math.max(...prices) : 0;
@@ -24,19 +26,14 @@ export default function PredictionChart({ data }) {
   const maxRounded = Math.ceil(max / step) * step || step;
   const yTicks = Array.from({ length: 4 }, (_, i) => ((i + 1) * maxRounded) / 4);
 
-  const dates = (data || []).map((d) => d.date);
+  const dates = series.map((d) => d.date);
   const xTicks = (() => {
     if (dates.length === 0) return [];
-    const ticks = [];
-    const start = new Date(dates[0]);
-    const end = new Date(dates[dates.length - 1]);
-    const dt = new Date(start);
-    dt.setDate(1);
-    while (dt <= end) {
-      ticks.push(dt.toISOString().slice(0, 10));
-      dt.setMonth(dt.getMonth() + 4);
-    }
-    return ticks;
+    const tickCount = Math.min(8, dates.length);
+    return Array.from({ length: tickCount }, (_, i) => {
+      const idx = Math.floor((dates.length - 1) * (i / (tickCount - 1)));
+      return dates[idx];
+    });
   })();
 
   const fmtCurrency = (v) => `$${v.toFixed(2)}`;
@@ -70,7 +67,7 @@ export default function PredictionChart({ data }) {
 
   return (
     <ResponsiveContainer width="100%" height={340}>
-      <LineChart data={data || []} margin={{ top: 24, right: 24, bottom: 80, left: 48 }}>
+      <LineChart data={series} margin={{ top: 24, right: 24, bottom: 80, left: 48 }}>
         <CartesianGrid strokeOpacity={0.12} stroke="hsl(var(--border))" />
         <XAxis
           dataKey="date"
@@ -99,7 +96,7 @@ export default function PredictionChart({ data }) {
           dataKey="pred"
           name="Predicted"
           stroke="#f97316"
-          dot={{ r: 3 }}
+          dot={false}
           activeDot={{ r: 5 }}
           strokeWidth={2}
         />
