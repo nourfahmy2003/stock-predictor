@@ -1,12 +1,30 @@
 "use client"
 
 import { motion } from "framer-motion"
+import dynamic from "next/dynamic"
 import SearchBar from "@/components/blocks/SearchBar"
-export default function HomeHero() {
 
+// ✅ Load the WebGL background only on the client
+const GalaxyInteractiveHeroBackground = dynamic(
+  () => import("@/components/ui/galaxy-interactive-hero-background"),
+  { ssr: false }
+)
+
+export default function HomeHero() {
   return (
     <section className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
-      <div className="relative text-center max-w-4xl mx-auto">
+      {/* BACKGROUND: full-bleed, behind content */}
+      <div className="absolute inset-0">
+        <GalaxyInteractiveHeroBackground
+          hue={0}                 // tweak if you want a different palette
+          hoverIntensity={0.25}   // subtle wobble
+          rotateOnHover={true}
+          forceHoverState={false}
+        />
+      </div>
+
+      {/* FOREGROUND CONTENT */}
+      <div className="relative z-10 text-center max-w-4xl mx-auto">
         <motion.div
           className="space-y-2 mb-6"
           initial={{ opacity: 0, y: 30 }}

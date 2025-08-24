@@ -100,12 +100,7 @@ export default function PredictionPanel({ ticker }) {
           </div>
 
           <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-heading font-medium">
-                Backtest {backtestHorizon}d + forecast {horizon}d
-              </div>
-              <DayRange disabled value={backtestHorizon + horizon} />
-            </div>
+            
               <ChartWrapper
                 title="Price: Actual vs 10-Day Prediction"
                 subtitle="Showing last 20 days + next 10 days"
