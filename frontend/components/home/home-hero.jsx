@@ -2,7 +2,10 @@
 
 import { motion } from "framer-motion"
 import dynamic from "next/dynamic"
-import SearchBar from "@/components/blocks/SearchBar"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import SymbolSearch from "@/components/symbol-search"
+import { api } from "@/lib/api"
 
 // ✅ Load the WebGL background only on the client
 const GalaxyInteractiveHeroBackground = dynamic(
@@ -11,6 +14,7 @@ const GalaxyInteractiveHeroBackground = dynamic(
 )
 
 export default function HomeHero() {
+  const router = useRouter()
   return (
     <section className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
       {/* BACKGROUND: full-bleed, behind content */}
@@ -56,7 +60,20 @@ export default function HomeHero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
         >
-          <SearchBar className="shadow-2xl shadow-primary/10" />
+          <SymbolSearch
+            onSelect={async (it) => {
+              try {
+                const v = await api(`/symbols/validate?symbol=${encodeURIComponent(it.symbol)}`);
+                if (v.valid) {
+                  router.push(`/t/${it.symbol}`);
+                } else {
+                  toast.error("This symbol is not available on Yahoo right now.");
+                }
+              } catch {
+                toast.error("This symbol is not available on Yahoo right now.");
+              }
+            }}
+          />
         </motion.div>
 
         <motion.p
