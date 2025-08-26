@@ -48,7 +48,7 @@ export default function PriceChart({ ticker }) {
   if (isLoading) {
     return (
       <div
-        className="h-80 w-full rounded-md border border-border bg-muted animate-pulse"
+        className="h-70 w-full rounded-md border border-border bg-muted animate-pulse"
         aria-busy="true"
       />
     );
@@ -99,12 +99,12 @@ export default function PriceChart({ ticker }) {
     }).format(v);
 
   return (
-    <div className="h-80 w-full bg-background text-foreground" aria-live="polite">
+    <div className="h-80 w-full  text-foreground" aria-live="polite">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={series}
           // ✅ equal inner padding (extra bottom for tilted ticks)
-          margin={{ top: 24, right: 24, bottom: 44, left: 24 }}
+          margin={{ top: 20, right: 10, bottom: 24, left: 10 }}
         >
           <defs>
             {/* visible line/fill in dark mode */}

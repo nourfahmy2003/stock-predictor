@@ -8,7 +8,7 @@ import DayRange from "@/components/stock/DayRange";
 import PredictionChart from "./PredictionChart";
 import { StatCard } from "@/components/stock/stat-card";
 import { usePrediction } from "./use-prediction-hook";
-
+import Loader from "@/components/ui/loader";
 export default function PredictionPanel({ ticker }) {
   const lookBack = 60;
   const context = 100;
@@ -41,29 +41,29 @@ export default function PredictionPanel({ ticker }) {
   const avgAbsErr =
     backtestRows.length > 0
       ? backtestRows.reduce((s, r) => s + Math.abs(r.pred - r.actual), 0) /
-        backtestRows.length
+      backtestRows.length
       : 0;
   const meanPctErr =
     backtestRows.length > 0
       ?
-          backtestRows.reduce(
-            (s, r) =>
-              s +
-              Math.abs(
-                (r.pred - r.actual) / (r.actual === 0 ? 1 : r.actual)
-              ) * 100,
-            0
-          ) /
-        backtestRows.length
+      backtestRows.reduce(
+        (s, r) =>
+          s +
+          Math.abs(
+            (r.pred - r.actual) / (r.actual === 0 ? 1 : r.actual)
+          ) * 100,
+        0
+      ) /
+      backtestRows.length
       : 0;
   const avgAccuracy = backtestRows.length > 0 ? 100 - meanPctErr : 0;
   const directionalAcc = metrics.accuracy_pct || 0;
 
   return (
-    <div className="space-y-6 relative">
+    <div className="space-y-6 relative min-h-[520px]">
       {loading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="text-sm text-foreground">Running LSTM notebook…</div>
+        <div className="absolute inset-x-0 top-24 bottom-0 z-10 grid place-items-center">
+          <Loader size={320} />
         </div>
       )}
 
@@ -100,13 +100,13 @@ export default function PredictionPanel({ ticker }) {
           </div>
 
           <Card className="p-4">
-            
-              <ChartWrapper
-                title="Price: Actual vs 10-Day Prediction"
-                subtitle="Showing last 20 days + next 10 days"
-              >
-                <PredictionChart data={series} />
-              </ChartWrapper>
+
+            <ChartWrapper
+              title="Price: Actual vs 10-Day Prediction"
+              subtitle="Showing last 20 days + next 10 days"
+            >
+              <PredictionChart data={series} />
+            </ChartWrapper>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <StatCard
                 title="Typical prediction error"

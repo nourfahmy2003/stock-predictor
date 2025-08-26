@@ -139,16 +139,19 @@ export default function TickerPage() {
         </div>
 
         {activeTab !== 'news' && (
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="sticky top-24">
-              <CardHeader className="pb-3">
+          <div className="lg:col-span-1">
+            <Card className="sticky top-24 h-[calc(100vh-8rem)] flex flex-col">
+              <CardHeader className="shrink-0 pb-3">
                 <CardTitle className="text-lg font-heading">Latest Headlines</CardTitle>
               </CardHeader>
-              <CardContent>
+
+              {/* This is the scrolling region */}
+              <CardContent className=" flex-1 overflow-y-auto pr-5">
                 <LatestHeadlines ticker={ticker} limit={20} />
               </CardContent>
             </Card>
           </div>
+
         )}
       </div>
     </div>

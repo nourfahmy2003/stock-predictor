@@ -14,7 +14,7 @@ app.include_router(extract.router)
 app.include_router(news.router)
 app.include_router(filings.router)
 app.include_router(backtest.router)
-app.include_router(symbols.router, prefix="/api", tags=["symbols"])
+app.include_router(symbols.router)
 
 
 @app.on_event("startup")
