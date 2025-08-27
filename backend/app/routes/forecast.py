@@ -2,32 +2,17 @@
 from __future__ import annotations
 
 import os
-import json
-import tempfile
-import asyncio
-import uuid
 from typing import Any, Dict, List
 
-import papermill as pm
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-NOTEBOOK_PATH = os.getenv("NOTEBOOK_PATH", "notebooks/Stock_LSTM_10day.ipynb")
+# Global predictor (saved model + scaler + per-ticker calibrator)
+from ..services.global_model import GlobalPredictor, GlobalConfig, to_forecast_json
 
-router = APIRouter()
+router = APIRouter(prefix="/forecast", tags=["forecast"])
 
-# ---------------------------
-# Minimal inline schemas
-# ---------------------------
-
-class PredictIn(BaseModel):
-    ticker: str = Field(..., description="e.g. AAPL or BTC-USD")
-    look_back: int = Field(60, ge=10, le=365)
-    horizon: int = Field(10, ge=1, le=60)
-    context: int = Field(100, ge=30, le=365)
-    backtest_horizon: int = Field(20, ge=1, le=90)
-
+# ---------- Schemas (unchanged shape for FE) ----------
 class ForecastOut(BaseModel):
     ticker: str
     look_back: int
@@ -37,136 +22,76 @@ class ForecastOut(BaseModel):
     metrics: Dict[str, float]
     forecast: List[Dict[str, Any]]
 
-# ---------------------------
-# Job storage (optional async flow)
-# ---------------------------
+class PredictIn(BaseModel):
+    ticker: str = Field(..., description="e.g. AAPL or BTC-USD")
+    look_back: int = Field(60, ge=10, le=365)
+    horizon: int = Field(10, ge=1, le=60)
+    context: int = Field(100, ge=30, le=365)
+    backtest_horizon: int = Field(20, ge=1, le=90)
 
-jobs: dict[str, dict] = {}
+# ---------- Lazy singleton for the global model ----------
+_gp: GlobalPredictor | None = None
 
-# ---------------------------
-# Notebook runner
-# ---------------------------
-
-def run_forecast_blocking(
-    ticker: str,
-    look_back: int,
-    context: int,
-    backtest_horizon: int,
-    horizon: int
-) -> Dict[str, Any]:
-    """
-    Executes the parameterized notebook and returns its JSON result.
-    """
-    if not os.path.exists(NOTEBOOK_PATH):
-        raise RuntimeError(f"Notebook not found: {NOTEBOOK_PATH}")
-
-    with tempfile.TemporaryDirectory() as tmp:
-        out_nb = os.path.join(tmp, "out.ipynb")
-        out_json = os.path.join(tmp, "forecast.json")
-
-        params = {
-            "TICKER": ticker,
-            "LOOKBACK": look_back,
-            "CONTEXT": context,
-            "BACKTEST_HORIZON": backtest_horizon,
-            "HORIZON": horizon,
-            "OUTPUT_JSON": out_json,
-        }
-
-        try:
-            pm.execute_notebook(
-                NOTEBOOK_PATH,
-                out_nb,
-                parameters=params,
-                kernel_name="python3",
-                progress=False,
-            )
-        except Exception as e:
-            raise RuntimeError(f"Notebook failed to execute: {e}")
-
-        if not os.path.exists(out_json):
-            raise RuntimeError(
-                "Notebook completed but OUTPUT_JSON not found.\n"
-                "Make sure the notebook writes a JSON file at OUTPUT_JSON."
-            )
-
-        with open(out_json) as f:
-            data = json.load(f)
-
-        # light validation
-        required_top = ["ticker", "look_back", "context", "backtest_horizon", "horizon", "metrics", "forecast"]
-        missing = [k for k in required_top if k not in data]
-        if missing:
-            raise RuntimeError(f"Notebook JSON missing keys: {missing}")
-
-        return data
-
-async def _run_job(job_id: str, payload: PredictIn):
-    try:
-        jobs[job_id] = {"state": "running", "progress": 0}
-        result = await asyncio.to_thread(
-            run_forecast_blocking,
-            payload.ticker.upper(),
-            payload.look_back,
-            payload.context,
-            payload.backtest_horizon,
-            payload.horizon,
+def _ensure_loaded():
+    global _gp
+    if _gp is None:
+        cfg = GlobalConfig(
+            models_dir=os.getenv("MODELS_DIR", "models"),
+            look_back=int(os.getenv("LOOK_BACK", "60")),
+            horizon=int(os.getenv("HORIZON", "10")),
         )
-        jobs[job_id] = {"state": "done", "result": result}
-    except Exception as e:
-        jobs[job_id] = {"state": "error", "message": str(e)}
+        _gp = GlobalPredictor(cfg)
 
-def create_job(payload: PredictIn) -> str:
-    job_id = uuid.uuid4().hex
-    jobs[job_id] = {"state": "queued"}
-    asyncio.create_task(_run_job(job_id, payload))
-    return job_id
-
-def get_job_status(job_id: str | None):
-    if not job_id:
-        return None
-    return jobs.get(job_id)
-
-# ---------------------------
-# Routes
-# ---------------------------
-
+# ---------- Routes ----------
 @router.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "notebook": NOTEBOOK_PATH,
-    }
+    try:
+        _ensure_loaded()
+        return {"status": "ok", "mode": "global", "models_dir": _gp.cfg.models_dir}
+    except Exception as e:
+        # Model not found / not trained yet
+        raise HTTPException(500, f"Global model not ready: {e}")
 
-@router.post("/predict")
-async def start_prediction(payload: PredictIn):
-    job_id = create_job(payload)
-    return JSONResponse({"jobId": job_id}, status_code=202)
+@router.get("/refresh")
+def refresh_models():
+    """
+    Hot-reload global model & scaler (call after nightly training).
+    """
+    try:
+        global _gp
+        _gp = None
+        _ensure_loaded()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to reload global model: {e}")
 
-@router.get("/status")
-async def status(req: Request):
-    qp = req.query_params
-    job_id = qp.get("jobId") or qp.get("job_id")
-    if not job_id:
-        raise HTTPException(status_code=400, detail="Missing jobId/job_id")
-    st = get_job_status(job_id)
-    if st is None:
-        raise HTTPException(status_code=404, detail="Unknown jobId")
-    return st
-
-@router.get("/forecast", response_model=ForecastOut)
+@router.get("", response_model=ForecastOut)  # GET /forecast
 def forecast(
     ticker: str = Query(..., description="e.g. AAPL or BTC-USD"),
-    look_back: int = Query(60, ge=10, le=365),
-    context: int = Query(100, ge=30, le=365),
-    backtest_horizon: int = Query(20, ge=1, le=90),
-    horizon: int = Query(10, ge=1, le=60),
+    look_back: int = Query(60, ge=10, le=365),          # kept for compatibility
+    context: int = Query(100, ge=30, le=365),           # kept for compatibility
+    backtest_horizon: int = Query(20, ge=1, le=90),     # kept for compatibility
+    horizon: int = Query(10, ge=1, le=60),              # kept for compatibility
 ):
+    """
+    Returns the same JSON shape as before, but powered by the saved global model.
+    """
+    _ensure_loaded()
     try:
-        data = run_forecast_blocking(
-            ticker.upper(), look_back, context, backtest_horizon, horizon
-        )
-        # FastAPI will validate against ForecastOut and serialize
+        # The global predictor uses its configured look_back/horizon internally
+        # to keep behavior stable. If you truly want to honor query values, you
+        # can thread them through GlobalConfig instead.
+        data = to_forecast_json(ticker.upper(), _gp)
         return data
     except Exception as e:
-        raise HTTPException(500, f"Notebook failed: {e}")
+        raise HTTPException(500, f"Global model inference failed: {e}")
+
+@router.post("/predict", response_model=ForecastOut)
+def predict_alias(payload: PredictIn):
+    """
+    Compatibility alias that returns the same JSON as GET /forecast.
+    NOTE: Final path = /forecast/predict (because of the router prefix).
+    """
+    _ensure_loaded()
+    return to_forecast_json(payload.ticker.upper(), _gp)
+

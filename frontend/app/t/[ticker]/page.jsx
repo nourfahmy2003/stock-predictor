@@ -36,23 +36,25 @@ export default function TickerPage() {
 
   useEffect(() => {
     if (!ticker) return;
-    async function startPrediction() {
+    let cancel = false;
+    (async () => {
       try {
-        const body = { ticker, look_back: 60, horizon: 10 };
-        const res = await api(`/predict`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+        const params = new URLSearchParams({
+          ticker,
+          look_back: "60",
+          context: "100",
+          backtest_horizon: "20",
+          horizon: "10",
         });
-        const jobId = res.jobId || res.job_id || res.id;
-        if (jobId) {
-          localStorage.setItem(`predjob:${ticker}`, JSON.stringify({ jobId, startedAt: Date.now() }));
-        }
+        const res = await api("GET", `/forecast?${params.toString()}`);
+        if (!cancel) setData(res);
       } catch (e) {
-        console.error("failed to start prediction", e);
+        if (!cancel) setErr(e);
+      } finally {
+        if (!cancel) setLoading(false);
       }
-    }
-    startPrediction();
+    })();
+    return () => { cancel = true; };
   }, [ticker]);
 
   const tabs = [

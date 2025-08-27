@@ -4,6 +4,7 @@ import os
 from app.core.config import make_app, logger
 from app.routes import forecast, overview, chart, extract, news, filings, backtest, symbols
 from app.services.sentiment import preload
+from app.routes.patterns import router as patterns_router
 
 app = make_app()
 
@@ -15,6 +16,7 @@ app.include_router(news.router)
 app.include_router(filings.router)
 app.include_router(backtest.router)
 app.include_router(symbols.router)
+app.include_router(patterns_router)
 
 
 @app.on_event("startup")
