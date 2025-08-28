@@ -15,6 +15,11 @@ def chart(ticker: str, range: str = Query("1y"), interval: str = Query("1d")):
         df = yf.Ticker(ticker.upper()).history(period=period, interval=interval)
         if df.empty:
             raise HTTPException(status_code=404, detail="No chart data")
+        tz = None
+        try:
+            tz = getattr(df.index.tz, "zone", None) or str(df.index.tz)
+        except Exception:
+            tz = None
         out = [
             {
                 "date": i.isoformat(),
@@ -24,6 +29,12 @@ def chart(ticker: str, range: str = Query("1y"), interval: str = Query("1d")):
             }
             for i, r in df.iterrows()
         ]
-        return {"ticker": ticker.upper(), "range": range, "interval": interval, "series": out}
+        return {
+            "ticker": ticker.upper(),
+            "range": range,
+            "interval": interval,
+            "timezone": tz,
+            "series": out,
+        }
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))

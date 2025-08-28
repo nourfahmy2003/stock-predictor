@@ -17,8 +17,8 @@ export default function HowItWorks() {
     },
     {
       icon: BarChart3,
-      title: "Review Backtest",
-      description: "See how our predictions would have performed historically",
+      title: "Detect Patterns",
+      description: "Identify classical chart patterns using YOLOv8",
     },
   ]
 

@@ -1,7 +1,8 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { MetricBox } from "@/components/stock/metric-box";
 import { ChartWrapper } from "@/components/stock/chart-wrapper";
 import DayRange from "@/components/stock/DayRange";
@@ -9,6 +10,7 @@ import PredictionChart from "./PredictionChart";
 import { StatCard } from "@/components/stock/stat-card";
 import { usePrediction } from "./use-prediction-hook";
 import Loader from "@/components/ui/loader";
+import { api } from "@/lib/api";
 export default function PredictionPanel({ ticker }) {
   const lookBack = 60;
   const context = 100;
@@ -17,6 +19,8 @@ export default function PredictionPanel({ ticker }) {
 
   const { state, result, err } = usePrediction(ticker, { lookBack, context, backtestHorizon, horizon });
   const loading = state === "loading";
+  const [detecting, setDetecting] = useState(false);
+  const [patternResult, setPatternResult] = useState(null);
 
   const metrics = result?.metrics || {};
   const series = useMemo(() => {
@@ -59,6 +63,18 @@ export default function PredictionPanel({ ticker }) {
   const avgAccuracy = backtestRows.length > 0 ? 100 - meanPctErr : 0;
   const directionalAcc = metrics.accuracy_pct || 0;
 
+  async function handleDetect() {
+    try {
+      setDetecting(true);
+      const data = await api(`/patterns/detect?symbol=${encodeURIComponent(ticker)}&interval=1d`);
+      setPatternResult(data);
+    } catch (e) {
+      console.error("pattern detection failed", e);
+    } finally {
+      setDetecting(false);
+    }
+  }
+
   return (
     <div className="space-y-6 relative min-h-[520px]">
       {loading && (
@@ -100,7 +116,11 @@ export default function PredictionPanel({ ticker }) {
           </div>
 
           <Card className="p-4">
-
+            <div className="flex justify-end mb-2">
+              <Button size="sm" variant="outline" onClick={handleDetect} disabled={detecting}>
+                {detecting ? "Detecting…" : "Detect patterns"}
+              </Button>
+            </div>
             <ChartWrapper
               title="Price: Actual vs 10-Day Prediction"
               subtitle="Showing last 20 days + next 10 days"
@@ -119,6 +139,11 @@ export default function PredictionPanel({ ticker }) {
                 description="over last 20 days"
               />
             </div>
+            {patternResult && (
+              <pre className="mt-4 text-xs bg-muted p-2 rounded overflow-x-auto">
+                {JSON.stringify(patternResult, null, 2)}
+              </pre>
+            )}
           </Card>
         </div>
       )}
