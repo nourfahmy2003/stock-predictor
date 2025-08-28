@@ -1,250 +1,181 @@
-from __future__ import annotations
-
-"""Routes for YOLO-based chart pattern detection.
-
-This is a lightweight placeholder implementation that exposes the REST
-interface expected by the frontend.  The actual ML model integration will be
-implemented later.
-"""
+# app/routes/patterns.py
+import io, os, time
 from datetime import datetime, timezone
-import base64
-import io
-import os
-import uuid
-from typing import List
+from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Query, UploadFile, File, Form, HTTPException
-from PIL import Image, ImageDraw, ImageFont
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi.responses import JSONResponse
+from PIL import Image
 
 try:
     from ultralytics import YOLO
-
-    YOLO_MODEL_PATH = os.getenv(
-        "YOLO_WEIGHTS", "foduucom/stockmarket-pattern-detection-yolov8"
-    )
-    _YOLO_MODEL = YOLO(YOLO_MODEL_PATH)
-except Exception as e:  # pragma: no cover - model is optional for tests
-    _YOLO_MODEL = None
-
-LABEL_MEANINGS = {
-    "Head and shoulders top": "Bearish reversal. Left shoulder–Head–Right shoulder; neckline breaks down → downside target ≈ head-to-neckline distance.",
-    "Head and shoulders bottom": "Bullish reversal (Inverse H&S). Breakout above neckline; target ≈ head-to-neckline distance.",
-    "M_Head": "Bearish M-shape / double-top variant. Two peaks with a middle dip; breakdown confirms weakness.",
-    "W_Bottom": "Bullish W-shape / double-bottom. Two troughs with a middle peak; breakout confirms strength.",
-    "Triangle": "Consolidation (sym/asc/desc not distinguished by label). Breakout direction matters; use breakout candle + retest.",
-    "StockLine": "Trendline segment detected (support/resistance). Use as contextual S/R; breaks can signal continuation or reversal.",
-}
-
-BULLISH = {"Head and shoulders bottom", "W_Bottom"}
-BEARISH = {"Head and shoulders top", "M_Head"}
-
-
-def _summarise(dets: List[dict], interval: str):
-    bullish = [d for d in dets if d["label"] in BULLISH]
-    bearish = [d for d in dets if d["label"] in BEARISH]
-    if bullish and not bearish:
-        trend = "Bullish"
-    elif bearish and not bullish:
-        trend = "Bearish"
-    else:
-        trend = "Mixed"
-
-    max_bull = max([d["conf"] for d in bullish], default=0)
-    max_bear = max([d["conf"] for d in bearish], default=0)
-    signal = "Watch"
-    if bullish and not bearish and max_bull >= 0.75:
-        signal = "Add to Watchlist"
-    elif bearish and not bullish and max_bear >= 0.75:
-        signal = "Reduce"
-
-    count = len(dets)
-    if count <= 1:
-        risk = "Low"
-    elif count <= 3:
-        risk = "Medium"
-    else:
-        risk = "High"
-
-    recognised = [
-        {"label": d["label"], "conf": d["conf"], "meaning": LABEL_MEANINGS.get(d["label"], "")}
-        for d in dets
-    ]
-
-    dur_map = {
-        "1m": "Minutes to hours",
-        "5m": "Minutes to hours",
-        "1h": "Hours to days",
-        "1d": "Days to weeks",
-    }
-
-    game_plan = {
-        "entryExit": (
-            "Use neckline or trendline breaks for entries and place stops beyond support/resistance."
-        ),
-        "riskReward": (
-            "Target risk/reward ≥ 1.5:1; reduce position size if signals conflict."
-        ),
-        "durationMonitoring": dur_map.get(interval, "Varies with interval"),
-        "indicators": (
-            "Confirm with SMA20/50/200 and RSI divergence before acting."
-        ),
-        "recognizedPatterns": recognised,
-    }
-
-    insights = {"trend": trend, "signal": signal, "risk": risk}
-    return insights, game_plan
+except Exception as e:
+    raise RuntimeError("Ultralytics not installed. pip install 'ultralytics>=8.0.0'") from e
 
 router = APIRouter(prefix="/patterns", tags=["patterns"])
 
-@router.get("/symbols")
-async def list_symbols():
-    """Return supported symbols for pattern detection.
+_MODEL = None
 
-    For now this simply returns an empty list.  The real implementation should
-    mirror the application's universe of tickers.
-    """
-    return {"items": []}
+def _assert_checkpoint_looks_valid(path: str):
+    if not os.path.exists(path):
+        raise HTTPException(500, detail=f"YOLO weights not found at {path}")
+    sz = os.path.getsize(path)
+    if sz < 5_000_000:
+        raise HTTPException(500, detail=f"YOLO weights too small ({sz} bytes) – download likely failed.")
+    with open(path, "rb") as f:
+        head = f.read(128)
+    if head.startswith(b"version https://git-lfs.github.com"):
+        raise HTTPException(500, detail="YOLO weights is a Git-LFS pointer file, not the real .pt.")
+    if head.startswith(b"<!DOCTYPE") or head.lower().startswith(b"<html") or head.startswith(b"Error"):
+        raise HTTPException(500, detail="YOLO weights appears to be HTML/error page. Redownload using huggingface_hub.")
 
-@router.get("/detect")
-async def detect_patterns(
-    symbol: str = Query(..., description="Ticker symbol"),
-    interval: str = Query(
-        "1d", regex="^(5y|1y|3mo|1mo|1d|1h|5m|1m)$"
-    ),
-    lookback: int = Query(250, ge=1, le=1000),
-    returnImage: bool = Query(False),
-    withOverlay: bool = Query(False),
-    cache: bool = Query(True),
-):
-    """Run pattern detection for a symbol/timeframe.
+def _resolve_weights() -> str:
+    cand = [
+        os.getenv("YOLO_WEIGHTS", "").strip(),
+        os.path.join(os.getcwd(), "weights", "patterns.pt"),
+        os.path.join(os.getcwd(), "weights", "best.pt"),
+        os.path.join(os.getcwd(), "weights", "model.pt"),
+    ]
+    for c in cand:
+        if c and os.path.exists(c):
+            return c
+    raise HTTPException(
+        500,
+        detail=("YOLO weights not found. Download 'model.pt' from "
+                "foduucom/stockmarket-pattern-detection-yolovv8 and set "
+                "YOLO_WEIGHTS=/abs/path/to/model.pt or place it at ./weights/model.pt"),
+    )
 
-    This placeholder returns an empty detection result.  A future update will
-    generate a candlestick chart, run YOLOv8 inference and optionally return
-    chart images with overlayed bounding boxes.
-    """
-    now = datetime.now(timezone.utc).isoformat()
-    return {
-        "symbol": symbol.upper(),
-        "interval": interval,
-        "asOf": now,
-        "detections": [],
-        "imageUrl": None,
-        "rawImageUrl": None,
-    }
+def _get_model():
+    global _MODEL
+    if _MODEL is None:
+        weights = _resolve_weights()
+        _assert_checkpoint_looks_valid(weights)
+        m = YOLO(weights)
+        dev = os.getenv("YOLO_DEVICE", "auto").strip()
+        if dev != "auto":
+            try:
+                m.to(dev)
+            except Exception:
+                pass
+        _MODEL = m
+    return _MODEL
 
+def _run_yolo(img: Image.Image, *, conf: float, imgsz: int, iou: float, max_det: int):
+    return _get_model().predict(
+        source=img, conf=conf, iou=iou, imgsz=imgsz, max_det=max_det, verbose=False
+    )[0]
 
-@router.post("/detect")
-async def detect_patterns_upload(
-    symbol: str = Form("", description="Ticker symbol"),
-    interval: str = Form("1d", regex="^(5y|1y|3mo|1mo|1d|1h|5m|1m)$"),
-    lookback: int = Form(250, ge=1, le=1000),
-    returnImage: bool = Form(False),
-    withOverlay: bool = Form(False),
-    cache: bool = Form(True),
-    image: UploadFile | None = File(None),
-):
-    """Run pattern detection on an uploaded chart image.
-
-    This placeholder accepts an optional ``image`` upload and returns a mock
-    detection payload.  The actual YOLOv8 integration will consume the image
-    and produce real detections in a future update.
-    """
-
-    now = datetime.now(timezone.utc).isoformat()
-    detections = []
-    if image is not None:
-        # Pretend we ran inference and found a pattern when an image is supplied.
-        detections = [
-            {"label": "head_and_shoulders", "conf": 0.87, "bbox": [100, 80, 200, 150]}
-        ]
-
-    return {
-        "symbol": symbol.upper(),
-        "interval": interval,
-        "asOf": now,
-        "detections": detections,
-        "imageUrl": None,
-        "rawImageUrl": None,
-    }
-
+def _boxes_to_dets(pred, x_off=0, y_off=0) -> List[Dict[str, Any]]:
+    names = getattr(pred, "names", {}) or {}
+    dets = []
+    for b in getattr(pred, "boxes", []) or []:
+        cls = int(b.cls[0])
+        label = names.get(cls, str(cls))
+        conf = float(b.conf[0])
+        x1, y1, x2, y2 = map(float, b.xyxy[0])
+        dets.append({
+            "label": label,
+            "conf": round(conf, 6),
+            "bbox": [int(x1 + x_off), int(y1 + y_off), int((x2 - x1)), int((y2 - y1))],
+        })
+    return dets
 
 @router.post("/detect-image")
 async def detect_image(
     file: UploadFile = File(...),
+    symbol: Optional[str] = Form(None),
     interval: str = Form("auto"),
-    symbol: str | None = Form(None),
-    minConf: float = Form(0.6),
-    withOverlay: bool = Form(True),
+    focus: str = Form("recent"),         # <<---- "recent" | "full" | "left"
+    withOverlay: bool = Form(False),
+    debug: bool = Form(False),
 ):
-    """Run YOLOv8 pattern detection on an uploaded chart screenshot."""
-
-    if _YOLO_MODEL is None:
-        raise HTTPException(status_code=500, detail="YOLO model not loaded")
-
-    data = await file.read()
-    raw_img = Image.open(io.BytesIO(data)).convert("RGB")
-    results = _YOLO_MODEL.predict(raw_img, conf=minConf, verbose=False)[0]
-    dets: List[dict] = []
-
-    draw = ImageDraw.Draw(raw_img) if withOverlay else None
-    for box in results.boxes:
-        cls = int(box.cls)
-        raw_label = results.names.get(cls, str(cls))
-        label = raw_label
-        conf = float(box.conf)
-        x1, y1, x2, y2 = [float(v) for v in box.xyxy[0]]
-        det = {
-            "label": label,
-            "conf": conf,
-            "bbox": [x1, y1, x2 - x1, y2 - y1],
-        }
-        dets.append(det)
-        if draw:
-            draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
-            draw.rectangle([x1, y1 - 18, x1 + 140, y1], fill="red")
-            draw.text((x1 + 4, y1 - 16), f"{label} ({conf:.2f})", fill="white")
-
-    overlay_url = None
-    if withOverlay and draw:
-        buf = io.BytesIO()
-        raw_img.save(buf, format="PNG")
-        overlay_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-
-    raw_buf = io.BytesIO()
-    Image.open(io.BytesIO(data)).save(raw_buf, format="PNG")
-    raw_url = "data:image/png;base64," + base64.b64encode(raw_buf.getvalue()).decode()
-
-    insights, game_plan = _summarise(dets, interval)
-    now = datetime.now(timezone.utc).isoformat()
-    return {
-        "symbol": symbol.upper() if symbol else None,
-        "interval": interval,
-        "asOf": now,
-        "detections": dets,
-        "imageUrl": overlay_url,
-        "rawImageUrl": raw_url,
-        "insights": insights,
-        "gamePlan": game_plan,
-    }
-
-
-@router.get("/overview")
-async def overview(
-    interval: str = Query("1y", regex="^(5y|1y|3mo|1mo|1d|1h|5m|1m)$")
-):
-    """Return a placeholder set of high-confidence detections.
-
-    The real implementation will scan a universe of tickers and rank the
-    detections by confidence for the requested interval.
     """
-    now = datetime.now(timezone.utc).isoformat()
-    items = [
-        {
-            "symbol": "AAPL",
-            "label": "double_bottom",
-            "conf": 0.82,
-            "interval": interval,
-            "updated": now,
+    Detect chart patterns on an uploaded screenshot.
+    """
+    # Tunables
+    MIN_CONF = float(os.getenv("YOLO_MIN_CONF", "0.25"))
+    IMG_SIZE = int(os.getenv("YOLO_IMG_SIZE", "1280"))
+    IOU      = float(os.getenv("YOLO_IOU", "0.5"))
+    MAX_DET  = int(os.getenv("YOLO_MAX_DET", "100"))
+
+    ROI_FRAC   = float(os.getenv("YOLO_ROI_FRAC", "0.35"))  # width fraction for ROI
+    ROI_STRICT = os.getenv("YOLO_ROI_STRICT", "false").lower() in ("1","true","yes")
+
+    raw = await file.read()
+    try:
+        pil = Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        raise HTTPException(400, detail="Invalid image file.")
+
+    W, H = pil.size  # PIL gives (W,H)
+    t0 = time.time()
+
+    detections: List[Dict[str, Any]] = []
+    used_roi = None
+
+    # 1) ROI pass (rightmost/leftmost) if requested
+    if focus in ("recent", "right", "left"):
+        frac = max(0.05, min(0.95, ROI_FRAC))
+        if focus in ("recent", "right"):
+            x0 = int(W * (1.0 - frac))
+            crop = pil.crop((x0, 0, W, H))
+            pred_roi = _run_yolo(crop, conf=MIN_CONF, imgsz=IMG_SIZE, iou=IOU, max_det=MAX_DET)
+            det_roi  = _boxes_to_dets(pred_roi, x_off=x0, y_off=0)
+            if det_roi:
+                detections = det_roi
+                used_roi = {"side": "right", "frac": frac, "x0": x0}
+            elif ROI_STRICT:
+                detections = []
+                used_roi = {"side": "right", "frac": frac, "x0": x0, "strict": True}
+        else:  # focus == "left"
+            x1 = int(W * frac)
+            crop = pil.crop((0, 0, x1, H))
+            pred_roi = _run_yolo(crop, conf=MIN_CONF, imgsz=IMG_SIZE, iou=IOU, max_det=MAX_DET)
+            det_roi  = _boxes_to_dets(pred_roi, x_off=0, y_off=0)
+            if det_roi:
+                detections = det_roi
+                used_roi = {"side": "left", "frac": frac, "x1": x1}
+            elif ROI_STRICT:
+                detections = []
+                used_roi = {"side": "left", "frac": frac, "x1": x1, "strict": True}
+
+    # 2) Fallback to full image if ROI empty (and not strict) or focus=="full"
+    if (focus == "full") or (not detections and not ROI_STRICT):
+        pred_full = _run_yolo(pil, conf=MIN_CONF, imgsz=IMG_SIZE, iou=IOU, max_det=MAX_DET)
+        det_full  = _boxes_to_dets(pred_full)
+        if not detections:
+            detections = det_full
+        else:
+            # Optionally merge: keep ROI detections and add full if you want both
+            pass
+
+    # Sort by x-center descending so rightmost patterns appear first
+    detections.sort(key=lambda d: d["bbox"][0] + d["bbox"][2] * 0.5, reverse=True)
+
+    latency_ms = int((time.time() - t0) * 1000)
+    empty_reason = None
+    if not detections:
+        empty_reason = (
+            "No patterns met the current thresholds. Try a higher-resolution screenshot "
+            "or lower YOLO_MIN_CONF (currently %s)."
+        ) % MIN_CONF
+
+    payload = {
+        "symbol": symbol,
+        "interval": interval or "auto",
+        "asOf": datetime.now(timezone.utc).isoformat(),
+        "detections": detections,
+        "imageUrl": None,
+        "rawImageUrl": None,
+        "latencyMs": latency_ms,
+        "emptyReason": empty_reason,
+        "roiUsed": used_roi,
+    }
+    if debug:
+        payload["meta"] = {
+            "imageWidth": W, "imageHeight": H,
+            "conf": MIN_CONF, "imgsz": IMG_SIZE, "iou": IOU, "max_det": MAX_DET,
+            "focus": focus, "roi_frac": ROI_FRAC, "roi_strict": ROI_STRICT,
         }
-    ]
-    return {"interval": interval, "items": items}
+    return JSONResponse(payload)
