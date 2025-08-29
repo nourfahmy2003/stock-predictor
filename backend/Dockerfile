@@ -6,13 +6,17 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
- && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+
+# Install torch first from the CPU wheel index
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.3.1+cpu
+
+# Then install everything else (fastapi, uvicorn, transformers, etc.)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the package instead of a missing app.py
 COPY app/ app/
-# (Optional) copy only needed runtime assets; skip notebooks for smaller image
 
+# Render will inject PORT
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
