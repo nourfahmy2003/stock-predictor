@@ -19,3 +19,15 @@ proxy environment variables before running the frontend:
 export HTTPS_PROXY=http://proxy.example.com:8080
 export HTTP_PROXY=http://proxy.example.com:8080
 ```
+
+## Deployment
+
+When deploying to platforms like Render, the backend must bind to the port
+provided by the environment. Start the API server with:
+
+```
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+The sentiment analysis model loads lazily on the first request, keeping startup
+memory usage low so the service can bind to the port quickly.

@@ -1,7 +1,6 @@
-import asyncio
 import os
 
-from app.core.config import make_app, logger
+from app.core.config import make_app
 from app.routes import (
     forecast,
     overview,
@@ -13,7 +12,6 @@ from app.routes import (
     symbols,
     patterns,
 )
-from app.services.sentiment import preload
 
 app = make_app()
 
@@ -28,15 +26,7 @@ app.include_router(symbols.router)
 app.include_router(patterns.router)
 
 
-@app.on_event("startup")
-async def _warmup():
-    try:
-        await asyncio.to_thread(preload)
-    except Exception as e:
-        logger.warning("Sentiment warmup skipped: %s", e)
-
-
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ["PORT"]))
