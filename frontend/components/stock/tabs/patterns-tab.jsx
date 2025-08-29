@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, Image as ImageIcon } from "lucide-react";
 import { FRIENDLY_LABELS, NORMALIZE, computeInsights } from "@/lib/patterns";
+import { useStockStore } from "@/lib/store";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 const FEATURE_FUTURE = (process.env.NEXT_PUBLIC_FEATURE_FUTURE ?? "true") !== "false";
@@ -15,23 +16,30 @@ const FEATURE_FUTURE = (process.env.NEXT_PUBLIC_FEATURE_FUTURE ?? "true") !== "f
 const normalizeLabel = (s = "") => NORMALIZE[String(s).toLowerCase()] ?? s;
 
 /* --- Upload bar (no confidence UI) --- */
-function UploadBar({ file, setFile, onDetect, loading, analyzedAt }) {
+function UploadBar({ file, setFile, onDetect, loading, analyzedAt, inputRef }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span className="inline-flex items-center gap-2 rounded-xl bg-blue-500/10 text-blue-300 px-3 py-1 text-xs font-medium">
         Auto interval
       </span>
 
-      <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 cursor-pointer hover:bg-slate-900/70">
+      <label
+        className={`inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 cursor-pointer hover:bg-slate-900/70 ${
+          loading ? "pointer-events-none opacity-50" : ""
+        }`}
+        onClick={() => inputRef.current?.click()}
+      >
         <Upload className="h-4 w-4" />
         <span>{file ? file.name : "Upload chart image (PNG/JPG ≤ 8MB)"}</span>
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-        />
       </label>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+      />
 
       <Button onClick={onDetect} disabled={loading || !file} className="rounded-xl">
         {loading ? "Detecting…" : "Detect"}
@@ -43,9 +51,8 @@ function UploadBar({ file, setFile, onDetect, loading, analyzedAt }) {
 }
 
 /* --- Chart + overlay --- */
-function ChartWithOverlay({ imgSrc, detections, future }) {
-  const imgRef = useRef(null);
-  const canvasRef = useRef(null);
+function ChartWithOverlay({ imgSrc, detections, future, imgRef, canvasRef, onFileSelect, inputRef }) {
+  const [dragOver, setDragOver] = useState(false);
 
   const draw = () => {
     const img = imgRef.current, cvs = canvasRef.current;
@@ -113,10 +120,28 @@ function ChartWithOverlay({ imgSrc, detections, future }) {
 
   if (!imgSrc) {
     return (
-      <div className="aspect-[16/9] w-full rounded-xl bg-slate-800/60 flex items-center justify-center text-slate-400">
-        <div className="flex flex-col items-center gap-2">
+      <div
+        className={`aspect-[16/9] w-full rounded-xl bg-slate-800/60 flex items-center justify-center text-slate-400 border-2 border-dashed ${
+          dragOver ? "border-blue-400 bg-slate-800/80" : "border-transparent"
+        }`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) onFileSelect(f);
+        }}
+        onClick={() => inputRef.current?.click()}
+      >
+        <div className="flex flex-col items-center gap-2 pointer-events-none">
           <ImageIcon className="h-6 w-6" />
-          <span className="text-sm">Drop a chart image here or click upload (PNG/JPG ≤ 8MB)</span>
+          <span className="text-sm">
+            Drop a chart image here or click to upload. Supported: PNG/JPG up to 8MB.
+          </span>
         </div>
       </div>
     );
@@ -250,17 +275,31 @@ function GamePlan({ detections, insights }) {
 }
 
 export function PatternsTab({ ticker }) {
+  const { patterns, setPattern } = useStockStore();
+  const cached = patterns[ticker];
   const [file, setFile] = useState(null);
-  const [imgBlobUrl, setImgBlobUrl] = useState(null);
-  const [result, setResult] = useState(/** @type {DetectImageResponse|null} */(null));
+  const [imgBlobUrl, setImgBlobUrl] = useState(cached?.fileUrl || null);
+  const [result, setResult] = useState(/** @type {DetectImageResponse|null} */(cached?.resultJson || null));
   const [loading, setLoading] = useState(false);
-  const [analyzedAt, setAnalyzedAt] = useState(null);
+  const [analyzedAt, setAnalyzedAt] = useState(cached?.analyzedAt || null);
   const [err, setErr] = useState(null);
+  const imgRef = useRef(null);
+  const canvasRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    if (!file) { setImgBlobUrl(null); return; }
+    if (cached) {
+      setImgBlobUrl(cached.fileUrl || null);
+      setResult(cached.resultJson || null);
+      setAnalyzedAt(cached.analyzedAt || null);
+    }
+  }, [cached]);
+
+  useEffect(() => {
+    if (!file) { return; }
     const url = URL.createObjectURL(file);
     setImgBlobUrl(url);
+    setResult(null);
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
@@ -279,8 +318,16 @@ export function PatternsTab({ ticker }) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       json.detections = (json.detections || []).map((d)=>({ ...d, label: normalizeLabel(d.label) }));
-      setResult(json);
-      setAnalyzedAt(new Date().toLocaleTimeString());
+      const ts = new Date().toLocaleTimeString();
+      setAnalyzedAt(ts);
+      if (json.detections && json.detections.length > 0) {
+        setResult(json);
+        setPattern(ticker, { fileUrl: imgBlobUrl, resultJson: json, analyzedAt: ts });
+      } else {
+        setResult({ detections: [] });
+        setImgBlobUrl(null);
+        setPattern(ticker, { fileUrl: null, resultJson: { detections: [] }, analyzedAt: ts });
+      }
     } catch (e) {
       setErr(e);
     } finally {
@@ -289,11 +336,39 @@ export function PatternsTab({ ticker }) {
   }
 
   const imgSrc = imgBlobUrl || result?.rawImageUrl || result?.imageUrl || null;
-  const insights = result ? computeInsights(result.detections || [], FEATURE_FUTURE ? result.future : null, result.combinedTrend) : null;
+  const noDetections = result && (result.detections || []).length === 0;
+  const insights = !noDetections && result ? computeInsights(result.detections || [], FEATURE_FUTURE ? result.future : null, result.combinedTrend) : null;
+
+  function downloadOverlay() {
+    const img = imgRef.current, cvs = canvasRef.current;
+    if (!img || !cvs) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = cvs.width;
+    canvas.height = cvs.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(cvs, 0, 0, canvas.width, canvas.height);
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = "patterns-overlay.png";
+    link.click();
+  }
+
+  function downloadJson() {
+    if (!result) return;
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "patterns.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-6">
-      <Card className="bg-slate-900/70 border-white/10 shadow-xl ring-1 ring-white/5">
+      <Card className="bg-slate-900/70 border-white/10 shadow-xl ring-1 ring-white/5 relative">
+        {loading && <div className="absolute top-0 left-0 right-0 h-1 bg-blue-500 animate-pulse" />}
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 font-heading">
             <ImageIcon className="h-5 w-5 text-primary" />
@@ -304,14 +379,29 @@ export function PatternsTab({ ticker }) {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <UploadBar file={file} setFile={setFile} onDetect={onDetect} loading={loading} analyzedAt={analyzedAt} />
-          <ChartWithOverlay imgSrc={imgSrc} detections={result?.detections || []} future={FEATURE_FUTURE ? result?.future : null} />
+          <UploadBar file={file} setFile={setFile} onDetect={onDetect} loading={loading} analyzedAt={analyzedAt} inputRef={inputRef} />
+          <ChartWithOverlay imgSrc={imgSrc} detections={noDetections ? [] : result?.detections || []} future={FEATURE_FUTURE ? result?.future : null} imgRef={imgRef} canvasRef={canvasRef} onFileSelect={setFile} inputRef={inputRef} />
+          {noDetections && (
+            <div className="text-sm text-slate-400">
+              No patterns detected in this image. Try a clearer or more recent chart section.
+            </div>
+          )}
+          {result && !noDetections && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={downloadOverlay}>
+                Download Overlay (PNG)
+              </Button>
+              <Button variant="outline" size="sm" onClick={downloadJson}>
+                Download JSON
+              </Button>
+            </div>
+          )}
           {err && <div className="text-sm text-red-400">{String(err.message || err)}</div>}
         </CardContent>
       </Card>
 
       {/* Render Insights/Plan ONLY after backend returns */}
-      {result && !loading && insights && (
+      {result && !loading && !noDetections && insights && (
         <>
           <KeyInsights insights={insights} />
           <GamePlan detections={result?.detections || []} insights={insights} />

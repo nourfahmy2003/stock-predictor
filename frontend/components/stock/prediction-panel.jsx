@@ -5,11 +5,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MetricBox } from "@/components/stock/metric-box";
 import { ChartWrapper } from "@/components/stock/chart-wrapper";
-import DayRange from "@/components/stock/DayRange";
 import PredictionChart from "./PredictionChart";
 import { StatCard } from "@/components/stock/stat-card";
 import { usePrediction } from "./use-prediction-hook";
-import Loader from "@/components/ui/loader";
+import { useStockStore } from "@/lib/store";
 import { api } from "@/lib/api";
 export default function PredictionPanel({ ticker }) {
   const lookBack = 60;
@@ -17,8 +16,10 @@ export default function PredictionPanel({ ticker }) {
   const backtestHorizon = 20;
   const horizon = 10;
 
-  const { state, result, err } = usePrediction(ticker, { lookBack, context, backtestHorizon, horizon });
+  const { state, result, err, retry } = usePrediction(ticker, { lookBack, context, backtestHorizon, horizon });
   const loading = state === "loading";
+  const { predictions } = useStockStore();
+  const updatedAt = predictions[ticker]?.finishedAt ? new Date(predictions[ticker].finishedAt).toLocaleTimeString() : null;
   const [detecting, setDetecting] = useState(false);
   const [patternResult, setPatternResult] = useState(null);
 
@@ -77,26 +78,32 @@ export default function PredictionPanel({ ticker }) {
 
   return (
     <div className="space-y-6 relative min-h-[520px]">
-      {loading && (
-        <div className="absolute inset-x-0 top-24 bottom-0 z-10 grid place-items-center">
-          <Loader size={320} />
-        </div>
-      )}
 
       <div className="flex items-center gap-2">
         <BarChart3 className="size-5 text-primary" />
         <h3 className="text-lg font-heading font-semibold">Prediction & Accuracy (LSTM)</h3>
       </div>
 
-      {err && <div className="text-sm text-red-500">{String(err.message || err)}</div>}
+      {state === "loading" && (
+        <div className="text-sm text-muted-foreground">Running prediction…</div>
+      )}
 
-      {!loading && !result && !err && (
+      {state === "error" && (
+        <div className="text-sm text-red-500">
+          Prediction failed. <button className="underline" onClick={retry}>Retry?</button>
+        </div>
+      )}
+
+      {!loading && !result && state === "idle" && (
         <div className="text-sm text-muted-foreground">No prediction yet.</div>
       )}
 
       {result && (
         <div className="space-y-6" aria-live="polite">
           {/* Friendly KPIs for general users */}
+          <div className="flex justify-end text-xs text-muted-foreground mb-1">
+            {updatedAt && <span>Updated {updatedAt}</span>}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-4">
             <MetricBox
               label="Avg 20-day Accuracy"
