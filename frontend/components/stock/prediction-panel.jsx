@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MetricBox } from "@/components/stock/metric-box";
 import { ChartWrapper } from "@/components/stock/chart-wrapper";
-import DayRange from "@/components/stock/DayRange";
 import PredictionChart from "./PredictionChart";
 import { StatCard } from "@/components/stock/stat-card";
 import { usePrediction } from "./use-prediction-hook";
@@ -17,8 +16,13 @@ export default function PredictionPanel({ ticker }) {
   const backtestHorizon = 20;
   const horizon = 10;
 
-  const { state, result, err } = usePrediction(ticker, { lookBack, context, backtestHorizon, horizon });
-  const loading = state === "loading";
+  const { status, result, err, refresh } = usePrediction(ticker, {
+    lookBack,
+    context,
+    backtestHorizon,
+    horizon,
+  });
+  const loading = status === "running";
   const [detecting, setDetecting] = useState(false);
   const [patternResult, setPatternResult] = useState(null);
 
@@ -88,9 +92,18 @@ export default function PredictionPanel({ ticker }) {
         <h3 className="text-lg font-heading font-semibold">Prediction & Accuracy (LSTM)</h3>
       </div>
 
-      {err && <div className="text-sm text-red-500">{String(err.message || err)}</div>}
+      {status === "running" && (
+        <div className="text-sm text-muted-foreground">Running prediction…</div>
+      )}
 
-      {!loading && !result && !err && (
+      {status === "error" && (
+        <div className="flex items-center gap-2 text-sm text-red-500">
+          Prediction failed.
+          <Button size="sm" variant="outline" onClick={refresh}>Retry?</Button>
+        </div>
+      )}
+
+      {!loading && status === "idle" && (
         <div className="text-sm text-muted-foreground">No prediction yet.</div>
       )}
 
