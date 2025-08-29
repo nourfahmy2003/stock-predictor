@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, Image as ImageIcon } from "lucide-react";
@@ -8,6 +8,8 @@ import { FRIENDLY_LABELS, NORMALIZE, computeInsights } from "@/lib/patterns";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 const FEATURE_FUTURE = (process.env.NEXT_PUBLIC_FEATURE_FUTURE ?? "true") !== "false";
+const FEATURE_HIGHLIGHT = false;
+const FEATURE_COPY = false;
 
 /** @typedef {{label:string, conf:number, bbox:[number,number,number,number]}} Detection */
 /** @typedef {{symbol?:string, interval?: "auto"|"1m"|"5m"|"1h"|"1d", asOf:string, detections:Detection[], imageUrl?:string|null, rawImageUrl?:string|null}} DetectImageResponse */
@@ -22,13 +24,18 @@ function UploadBar({ file, setFile, onDetect, loading, analyzedAt }) {
         Auto interval
       </span>
 
-      <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 cursor-pointer hover:bg-slate-900/70">
+      <label
+        className={`inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/50 px-3 py-2 text-sm text-slate-200 ${
+          loading ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-slate-900/70"
+        }`}
+      >
         <Upload className="h-4 w-4" />
         <span>{file ? file.name : "Upload chart image (PNG/JPG ≤ 8MB)"}</span>
         <input
           type="file"
           accept="image/*"
           className="hidden"
+          disabled={loading}
           onChange={(e) => setFile(e.target.files?.[0] || null)}
         />
       </label>
@@ -43,9 +50,36 @@ function UploadBar({ file, setFile, onDetect, loading, analyzedAt }) {
 }
 
 /* --- Chart + overlay --- */
-function ChartWithOverlay({ imgSrc, detections, future }) {
+const ChartWithOverlay = React.forwardRef(function ChartWithOverlay(
+  { imgSrc, detections, future, onFile },
+  ref
+) {
   const imgRef = useRef(null);
   const canvasRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    download: () => {
+      const img = imgRef.current, cvs = canvasRef.current;
+      if (!img || !cvs) return;
+      const temp = document.createElement("canvas");
+      temp.width = cvs.width;
+      temp.height = cvs.height;
+      const ctx = temp.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+      ctx.drawImage(cvs, 0, 0);
+      const a = document.createElement("a");
+      a.href = temp.toDataURL("image/png");
+      a.download = "pattern-overlay.png";
+      a.click();
+    },
+  }));
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) onFile?.(f);
+  };
 
   const draw = () => {
     const img = imgRef.current, cvs = canvasRef.current;
@@ -113,22 +147,30 @@ function ChartWithOverlay({ imgSrc, detections, future }) {
 
   if (!imgSrc) {
     return (
-      <div className="aspect-[16/9] w-full rounded-xl bg-slate-800/60 flex items-center justify-center text-slate-400">
+      <div
+        className="aspect-[16/9] w-full rounded-xl bg-slate-800/60 flex items-center justify-center text-slate-400"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+      >
         <div className="flex flex-col items-center gap-2">
           <ImageIcon className="h-6 w-6" />
-          <span className="text-sm">Drop a chart image here or click upload (PNG/JPG ≤ 8MB)</span>
+          <span className="text-sm">Drop a chart image here or click to upload. Supported: PNG/JPG up to 8MB.</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative aspect-[16/9] w-full rounded-xl overflow-hidden bg-slate-800">
+    <div
+      className="relative aspect-[16/9] w-full rounded-xl overflow-hidden bg-slate-800"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+    >
       <img ref={imgRef} src={imgSrc} alt="Uploaded chart" className="w-full h-full object-contain" onLoad={draw} />
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" />
     </div>
   );
-}
+});
 
 /* --- Insights & Game Plan (render only after result exists) --- */
 function Pill({ label, value, muted }) {
@@ -250,12 +292,29 @@ function GamePlan({ detections, insights }) {
 }
 
 export function PatternsTab({ ticker }) {
+  const cacheKey = `patterns-cache:${ticker}`;
   const [file, setFile] = useState(null);
   const [imgBlobUrl, setImgBlobUrl] = useState(null);
+  const [cachedUrl, setCachedUrl] = useState(null);
   const [result, setResult] = useState(/** @type {DetectImageResponse|null} */(null));
+  const [rawResult, setRawResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [analyzedAt, setAnalyzedAt] = useState(null);
   const [err, setErr] = useState(null);
+  const chartRef = useRef(null);
+
+  useEffect(() => {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const { fileUrl, resultJson, rawJson, analyzedAt } = JSON.parse(cached);
+        setCachedUrl(fileUrl);
+        setResult(resultJson);
+        setRawResult(rawJson);
+        setAnalyzedAt(analyzedAt);
+      } catch {}
+    }
+  }, [cacheKey]);
 
   useEffect(() => {
     if (!file) { setImgBlobUrl(null); return; }
@@ -264,9 +323,20 @@ export function PatternsTab({ ticker }) {
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
+  function handleFile(f) {
+    if (loading) return;
+    setFile(f);
+    setResult(null);
+    setRawResult(null);
+    setErr(null);
+    setAnalyzedAt(null);
+    setCachedUrl(null);
+    localStorage.removeItem(cacheKey);
+  }
+
   async function onDetect() {
     if (!file) { setErr(new Error("Upload a chart image first.")); return; }
-    setLoading(true); setErr(null); setResult(null);
+    setLoading(true); setErr(null); setResult(null); setRawResult(null);
     try {
       const fd = new FormData();
       if (ticker) fd.append("symbol", ticker);
@@ -277,10 +347,20 @@ export function PatternsTab({ ticker }) {
 
       const res = await fetch(`${API_BASE}/patterns/detect-image`, { method:"POST", body: fd });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      json.detections = (json.detections || []).map((d)=>({ ...d, label: normalizeLabel(d.label) }));
+      const rawJson = await res.json();
+      const json = { ...rawJson, detections: (rawJson.detections || []).map((d)=>({ ...d, label: normalizeLabel(d.label) })) };
+      if (!json.detections.length) {
+        handleFile(null);
+        setErr(new Error("No patterns detected in this image. Try a clearer or more recent chart section."));
+        return;
+      }
       setResult(json);
-      setAnalyzedAt(new Date().toLocaleTimeString());
+      setRawResult(rawJson);
+      const analyzed = new Date().toLocaleTimeString();
+      setAnalyzedAt(analyzed);
+      const fileUrl = json.rawImageUrl || json.imageUrl || imgBlobUrl;
+      localStorage.setItem(cacheKey, JSON.stringify({ fileUrl, resultJson: json, rawJson, analyzedAt: analyzed }));
+      setCachedUrl(fileUrl);
     } catch (e) {
       setErr(e);
     } finally {
@@ -288,7 +368,22 @@ export function PatternsTab({ ticker }) {
     }
   }
 
-  const imgSrc = imgBlobUrl || result?.rawImageUrl || result?.imageUrl || null;
+  function handleDownloadOverlay() {
+    chartRef.current?.download();
+  }
+
+  function handleDownloadJson() {
+    if (!rawResult) return;
+    const blob = new Blob([JSON.stringify(rawResult, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "patterns.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const imgSrc = imgBlobUrl || cachedUrl || result?.rawImageUrl || result?.imageUrl || null;
   const insights = result ? computeInsights(result.detections || [], FEATURE_FUTURE ? result.future : null, result.combinedTrend) : null;
 
   return (
@@ -304,14 +399,30 @@ export function PatternsTab({ ticker }) {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <UploadBar file={file} setFile={setFile} onDetect={onDetect} loading={loading} analyzedAt={analyzedAt} />
-          <ChartWithOverlay imgSrc={imgSrc} detections={result?.detections || []} future={FEATURE_FUTURE ? result?.future : null} />
+          <UploadBar file={file} setFile={handleFile} onDetect={onDetect} loading={loading} analyzedAt={analyzedAt} />
+          <ChartWithOverlay
+            ref={chartRef}
+            imgSrc={imgSrc}
+            detections={result?.detections || []}
+            future={FEATURE_FUTURE ? result?.future : null}
+            onFile={handleFile}
+          />
+          {result && !loading && result.detections?.length > 0 && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleDownloadOverlay} className="rounded-xl">
+                Download Overlay (PNG)
+              </Button>
+              <Button variant="outline" onClick={handleDownloadJson} className="rounded-xl">
+                Download JSON
+              </Button>
+            </div>
+          )}
           {err && <div className="text-sm text-red-400">{String(err.message || err)}</div>}
         </CardContent>
       </Card>
 
-      {/* Render Insights/Plan ONLY after backend returns */}
-      {result && !loading && insights && (
+      {/* Render Insights/Plan ONLY when detections exist */}
+      {result && !loading && result.detections?.length > 0 && insights && (
         <>
           <KeyInsights insights={insights} />
           <GamePlan detections={result?.detections || []} insights={insights} />
