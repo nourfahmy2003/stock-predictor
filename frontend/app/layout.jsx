@@ -1,6 +1,7 @@
 import { Poppins, Inter, Roboto_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
 import Navbar from "@/components/navigation/navbar"
+import { StockStoreProvider } from "@/hooks/stock-store"
 import "./globals.css"
 
 const poppins = Poppins({
@@ -37,8 +38,10 @@ export default function RootLayout({ children }) {
         className={`${poppins.variable} ${inter.variable} ${robotoMono.variable} antialiased bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100`}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <Navbar />
-          <main className="pt-20">{children}</main>
+          <StockStoreProvider>
+            <Navbar />
+            <main className="pt-20">{children}</main>
+          </StockStoreProvider>
         </ThemeProvider>
       </body>
     </html>
