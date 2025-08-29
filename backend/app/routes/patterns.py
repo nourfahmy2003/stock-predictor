@@ -7,10 +7,10 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 from PIL import Image
 
-try:
-    from ultralytics import YOLO
-except Exception as e:
-    raise RuntimeError("Ultralytics not installed. pip install 'ultralytics>=8.0.0'") from e
+try:  # pragma: no cover - optional dependency
+    from ultralytics import YOLO  # type: ignore
+except Exception:  # pragma: no cover
+    YOLO = None  # type: ignore
 
 # Optional import for future model fallback
 try:  # pragma: no cover - optional dependency
@@ -56,6 +56,8 @@ def _resolve_weights() -> str:
 def _get_model():
     global _MODEL
     if _MODEL is None:
+        if YOLO is None:
+            raise HTTPException(500, detail="Ultralytics YOLO not installed")
         weights = _resolve_weights()
         _assert_checkpoint_looks_valid(weights)
         m = YOLO(weights)
@@ -85,6 +87,8 @@ def _get_future_model():  # pragma: no cover - heavy IO
     if _FUTURE_MODEL is None:
         weights = _resolve_future_weights()
         if weights:
+            if YOLO is None:
+                raise HTTPException(500, detail="Ultralytics YOLO not installed")
             _assert_checkpoint_looks_valid(weights)
             m = YOLO(weights)
         else:

@@ -77,3 +77,8 @@ docker run -p 8000:8000 \
 - Long runs (~3 min) are fine on a VM. If you front with Nginx, raise `proxy_read_timeout` to 600s.
 - Keep TensorFlow version aligned with the one you trained on.
 - Tighten CORS and add auth if exposing publicly.
+
+## Configuration
+
+Copy `.env.example` to `.env` and adjust variables as needed. At minimum set
+`FRONTEND_ORIGIN` to the URL of your frontend to enable CORS in development.

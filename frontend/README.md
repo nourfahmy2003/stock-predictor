@@ -40,3 +40,9 @@ environment variables to the file paths of the downloaded CSV files:
 
 When these variables are present, the API will read from the local files
 instead of fetching them from the internet.
+
+## Connecting to the backend
+
+Create a `.env.local` file based on `.env.example` and set
+`NEXT_PUBLIC_API_BASE_URL` to the URL of the backend API (e.g.
+`http://localhost:8000`).

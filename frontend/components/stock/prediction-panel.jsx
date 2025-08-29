@@ -11,7 +11,8 @@ import { StatCard } from "@/components/stock/stat-card";
 import { usePrediction } from "./use-prediction-hook";
 import Loader from "@/components/ui/loader";
 import { api } from "@/lib/api";
-export default function PredictionPanel({ ticker }) {
+
+function PredictionPanel({ ticker }) {
   const lookBack = 60;
   const context = 100;
   const backtestHorizon = 20;
@@ -150,3 +151,6 @@ export default function PredictionPanel({ ticker }) {
     </div>
   );
 }
+
+export { PredictionPanel };
+export default PredictionPanel;
