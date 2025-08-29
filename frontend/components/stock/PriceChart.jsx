@@ -19,8 +19,9 @@ import { api } from "@/lib/api";
 const fetcher = (path) => api(path);
 
 const RANGE_RULES = {
-  '1m': { step: { minutes: 5 } },
-  '5m': { step: { minutes: 30 } },
+  // for intraday ranges show only top-of-hour labels
+  '1m': { step: { hours: 1 } },
+  '5m': { step: { hours: 1 } },
   '1d': { step: { hours: 1 } },
   '1mo': { step: { weeks: 1 } },
   '3mo': { step: { weeks: 2 } },
@@ -40,7 +41,45 @@ const OPTION_CONFIG = {
 
 const OPTIONS = Object.keys(OPTION_CONFIG);
 
-const ticksForWidth = (w) => Math.max(5, Math.min(12, Math.floor(w / 80)));
+// target a reasonable number of x ticks depending on chart width
+const ticksForWidth = (w) => {
+  if (w <= 480) return 5; // ~4–5 ticks
+  if (w <= 1024) return 6; // ~5–6 ticks
+  return 8; // wide screens can show up to 8 ticks
+};
+
+// target y-axis ticks based on chart height
+const ticksForHeight = (h) => {
+  if (h <= 360) return 5;
+  if (h <= 560) return 6;
+  return 8;
+};
+
+// allowed step candidates for y-axis ticks
+const STEP_CANDIDATES = [
+  0.01,
+  0.02,
+  0.05,
+  0.1,
+  0.2,
+  0.25,
+  0.5,
+  1,
+  2,
+  2.5,
+  5,
+  10,
+  20,
+  25,
+  50,
+];
+
+function pickStep(rough) {
+  for (const c of STEP_CANDIDATES) {
+    if (c >= rough) return c;
+  }
+  return STEP_CANDIDATES[STEP_CANDIDATES.length - 1];
+}
 
 function addStep(d, step) {
   const n = new Date(d);
@@ -193,6 +232,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
   }, [data]);
 
   const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(0);
 
   const series = useMemo(
     () => (data?.series || []).map((p) => ({ ...p, ts: new Date(p.date).getTime() })),
@@ -201,21 +241,41 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
   const rk = config.rangeKey;
   const ticks = useMemo(() => generateTicks(rk, series, width), [rk, series, width]);
 
-  const { prices, domain, yTicks, last } = useMemo(() => {
+  const { prices, domain, yTicks, last, formatY } = useMemo(() => {
     const prices = series.map((p) => p.close);
     if (prices.length === 0) {
-      return { prices, domain: [0, 1], yTicks: [], last: null };
+      return {
+        prices,
+        domain: [0, 1],
+        yTicks: [],
+        last: null,
+        formatY: (v) => v,
+      };
     }
     const min = Math.min(...prices);
     const max = Math.max(...prices);
-    const pad = Math.max((max - min) * 0.02, 0.5);
-    const domain = [min - pad, max + pad];
-    const count = 6;
-    const step = (domain[1] - domain[0]) / (count - 1);
-    const yTicks = Array.from({ length: count }, (_, i) => domain[0] + step * i);
+    const range = max - min;
+    let yMin = Math.max(0, min - range * 0.04);
+    let yMax = max + range * 0.08;
+    const desired = ticksForHeight(height);
+    const step = pickStep((yMax - yMin) / desired);
+    yMin = Math.floor(yMin / step) * step;
+    yMax = Math.ceil(yMax / step) * step;
+    const ticks = [];
+    for (let v = yMin; v <= yMax + step / 2; v += step) {
+      ticks.push(Number(v.toFixed(10)));
+    }
+    const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
+    const formatter = (v) =>
+      new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      }).format(v);
     const last = series[series.length - 1];
-    return { prices, domain, yTicks, last };
-  }, [series]);
+    return { prices, domain: [yMin, yMax], yTicks: ticks, last, formatY: formatter };
+  }, [series, height]);
 
   const isLive = last ? Date.now() - last.ts < config.liveMs : false;
 
@@ -261,14 +321,6 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
   const tooltipBg =
     theme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)";
 
-  const formatY = (v) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(v);
-
   return (
     <div className="h-80 w-full  text-foreground" aria-live="polite">
       <div className="flex items-center justify-end gap-2 mb-2">
@@ -290,10 +342,17 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
         )}
         <span className="text-xs text-muted-foreground">Updated {fmtUpdated}</span>
       </div>
-      <ResponsiveContainer width="100%" height="100%" onResize={(w) => setWidth(w)}>
+      <ResponsiveContainer
+        width="100%"
+        height="100%"
+        onResize={(w, h) => {
+          setWidth(w);
+          setHeight(h);
+        }}
+      >
         <AreaChart
           data={series}
-          margin={{ top: 20, right: 10, bottom: 24, left: 10 }}
+          margin={{ top: 22, right: 32, bottom: 42, left: 36 }}
         >
           <defs>
             {/* visible line/fill in dark mode */}
@@ -305,8 +364,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
 
           <CartesianGrid
             stroke={gridColor}
-            strokeDasharray="3 3"
-            opacity={0.25}
+            strokeOpacity={0.12}
             vertical={false}
           />
 
@@ -333,7 +391,6 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
             tick={{ fill: tickColor, fontSize: 12 }}
             axisLine={{ stroke: axisColor, opacity: 0.35 }}
             tickLine={{ stroke: axisColor, opacity: 0.35 }}
-            width={68}
           />
 
           <Tooltip

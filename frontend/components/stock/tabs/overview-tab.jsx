@@ -71,7 +71,6 @@ export function OverviewTab({ ticker, stockData }) {
   const handleDateChange = (date) => {
     setSelectedDate(date)
     // In a real app, this would filter the chart data based on the selected date
-    console.log("Time travel to:", date)
   }
 
   return (

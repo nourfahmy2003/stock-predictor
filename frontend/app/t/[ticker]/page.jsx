@@ -96,10 +96,10 @@ export default function TickerPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-heading">Price Chart</CardTitle>
+                    <CardTitle className="font-heading pb--20">Price Chart</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-72">
+                    <div className="h-73">
                       <PriceChart ticker={ticker} />
                     </div>
                   </CardContent>
