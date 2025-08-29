@@ -1,34 +1,18 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload, Image as ImageIcon } from "lucide-react";
+import { FRIENDLY_LABELS, NORMALIZE, computeInsights } from "@/lib/patterns";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+const FEATURE_FUTURE = (process.env.NEXT_PUBLIC_FEATURE_FUTURE ?? "true") !== "false";
 
 /** @typedef {{label:string, conf:number, bbox:[number,number,number,number]}} Detection */
 /** @typedef {{symbol?:string, interval?: "auto"|"1m"|"5m"|"1h"|"1d", asOf:string, detections:Detection[], imageUrl?:string|null, rawImageUrl?:string|null}} DetectImageResponse */
 
-const FRIENDLY_LABELS = {
-  "Head and shoulders top": "Bearish reversal. Left shoulder–Head–Right shoulder; neckline breaks down → downside target ≈ head-to-neckline distance.",
-  "Head and shoulders bottom": "Bullish reversal (Inverse H&S). Breakout above neckline; target ≈ head-to-neckline distance.",
-  M_Head: "Bearish M-shape / double-top variant. Two peaks with a middle dip; breakdown confirms weakness.",
-  W_Bottom: "Bullish W-shape / double-bottom. Two troughs with a middle peak; breakout confirms strength.",
-  Triangle: "Consolidation (sym/asc/desc not distinguished). Breakout direction matters; use breakout candle + retest.",
-  StockLine: "Trendline segment (support/resistance). Breaks can signal continuation or reversal.",
-};
-
-const NORMALIZE = {
-  head_and_shoulders: "Head and shoulders top",
-  head_and_shoulders_top: "Head and shoulders top",
-  head_and_shoulders_bottom: "Head and shoulders bottom",
-  m_head: "M_Head",
-  w_bottom: "W_Bottom",
-  triangle: "Triangle",
-  stockline: "StockLine",
-};
-const normalizeLabel = (s="") => NORMALIZE[String(s).toLowerCase()] ?? s;
+const normalizeLabel = (s = "") => NORMALIZE[String(s).toLowerCase()] ?? s;
 
 /* --- Upload bar (no confidence UI) --- */
 function UploadBar({ file, setFile, onDetect, loading, analyzedAt }) {
@@ -59,7 +43,7 @@ function UploadBar({ file, setFile, onDetect, loading, analyzedAt }) {
 }
 
 /* --- Chart + overlay --- */
-function ChartWithOverlay({ imgSrc, detections }) {
+function ChartWithOverlay({ imgSrc, detections, future }) {
   const imgRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -70,12 +54,10 @@ function ChartWithOverlay({ imgSrc, detections }) {
     cvs.width = rect.width;  cvs.height = rect.height;
     const ctx = cvs.getContext("2d");
     ctx.clearRect(0,0,cvs.width,cvs.height);
-    if (!detections?.length) return;
-
     const sx = rect.width / img.naturalWidth;
     const sy = rect.height / img.naturalHeight;
 
-    detections.forEach((d) => {
+    detections?.forEach((d) => {
       const [x,y,w,h] = d.bbox;
       const X=x*sx, Y=y*sy, W=w*sx, H=h*sy;
       ctx.lineWidth = 2;
@@ -91,6 +73,34 @@ function ChartWithOverlay({ imgSrc, detections }) {
       ctx.fillStyle = "white";
       ctx.fillText(text, X+pad, Y-6);
     });
+
+    if (future?.direction && future.direction !== "Not found" && future.boxes?.length) {
+      const b = future.boxes[0];
+      const [x,y,w,h] = b.bbox;
+      const X=x*sx, Y=y*sy, W=w*sx, H=h*sy;
+      const cx = X + W/2;
+      const top = Y - 24;
+      ctx.fillStyle = future.direction === "Up" ? "#16a34a" : "#dc2626";
+      ctx.beginPath();
+      if (future.direction === "Up") {
+        ctx.moveTo(cx, top);
+        ctx.lineTo(cx-6, top+12);
+        ctx.lineTo(cx+6, top+12);
+      } else {
+        ctx.moveTo(cx, top+12);
+        ctx.lineTo(cx-6, top);
+        ctx.lineTo(cx+6, top);
+      }
+      ctx.closePath();
+      ctx.fill();
+      const text = `${future.direction} (${Math.round((future.conf||0)*100)}%)`;
+      ctx.font = "12px Inter, ui-sans-serif";
+      const pad=6, tw=ctx.measureText(text).width;
+      ctx.fillStyle = "rgba(15,23,42,0.9)";
+      ctx.fillRect(cx - tw/2 - pad, top+12, tw+pad*2, 18);
+      ctx.fillStyle = "white";
+      ctx.fillText(text, cx - tw/2, top+24);
+    }
   };
 
   useEffect(() => {
@@ -99,7 +109,7 @@ function ChartWithOverlay({ imgSrc, detections }) {
     window.addEventListener("resize", onR);
     return () => window.removeEventListener("resize", onR);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imgSrc, detections]);
+  }, [imgSrc, detections, future]);
 
   if (!imgSrc) {
     return (
@@ -121,41 +131,52 @@ function ChartWithOverlay({ imgSrc, detections }) {
 }
 
 /* --- Insights & Game Plan (render only after result exists) --- */
-function Pill({ label, value }) {
+function Pill({ label, value, muted }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-2xl bg-slate-800/80 px-4 py-2 text-sm text-slate-100 shadow-sm">
-      <span className="opacity-80">{label}</span>
+    <span
+      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm shadow-sm ${
+        muted ? "bg-slate-800/60 text-slate-400" : "bg-slate-800/80 text-slate-100"
+      }`}
+    >
+      <span className="opacity-80">{label}:</span>
       <strong className="font-semibold">{value}</strong>
     </span>
   );
 }
 
-function KeyInsights({ detections }) {
-  // Simple derived info; you can remove or expand later
-  const bullishSet = new Set(["Head and shoulders bottom","W_Bottom"]);
-  const bearishSet = new Set(["Head and shoulders top","M_Head"]);
-  let bullish=0,bearish=0;
-  detections.forEach(d=>{
-    const L = normalizeLabel(d.label);
-    if (bullishSet.has(L)) bullish++;
-    if (bearishSet.has(L)) bearish++;
-  });
-  const trend = bullish&&!bearish ? "Bullish" : bearish&&!bullish ? "Bearish" : "Mixed";
-  const signal = detections.some(d=>d.conf>=0.75) ? (bullish&&!bearish?"Add to Watchlist":bearish&&!bullish?"Reduce":"Watch") : "Watch";
-  const risk = detections.length<=1?"Low":detections.length===2?"Medium":"High";
-
+function KeyInsights({ insights }) {
   return (
     <Card className="bg-slate-900/70 border-white/5">
-      <CardHeader><CardTitle className="font-heading">Key Insights</CardTitle></CardHeader>
-      <CardContent className="flex flex-wrap gap-3">
-        <Pill label="Trend" value={trend} />
-        <Pill label="Signal" value={signal} />
-        <Pill label="Risk Level" value={risk} />
-        <Pill label="Volume" value="Not inferred" />
+      <CardHeader>
+        <CardTitle className="font-heading">Key Insights</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="flex flex-wrap gap-3">
+          <Pill label="Trend" value={insights.trend} muted={insights.trend === "Not found"} />
+          {FEATURE_FUTURE && (
+            <Pill label="Future" value={insights.future} muted={insights.future === "Not found"} />
+          )}
+          <Pill label="Signal" value={insights.signal} muted={insights.signal === "N/A"} />
+          <Pill label="Risk" value={insights.risk} muted={insights.risk === "N/A"} />
+          <Pill label="Volume" value={insights.volume} muted />
+        </div>
+        {insights.trend === "Not found" && (
+          <div className="space-y-1 text-xs text-slate-400">
+            <p>
+              {insights.hasDetections
+                ? "Only neutral structures detected (e.g., triangle/trendline). Direction is not inferred."
+                : "No directional pattern detected in the uploaded image."}
+            </p>
+            {insights.future === "Not found" && (
+              <p>Future model did not infer direction from this image.</p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
+
 
 function Section({ title, children, defaultOpen=false }) {
   return (
@@ -165,15 +186,37 @@ function Section({ title, children, defaultOpen=false }) {
     </details>
   );
 }
-function GamePlan({ detections }) {
+function GamePlan({ detections, insights }) {
   const list = (detections || []).map((d)=>({
     ...d, label: normalizeLabel(d.label),
-    meaning: FRIENDLY_LABELS[normalizeLabel(d.label)] || ""
+    meaning: FRIENDLY_LABELS[normalizeLabel(d.label)] || "",
   }));
+  if (insights.trend === "Not found" && !insights.hasDetections) {
+    return (
+      <Card className="bg-slate-900/70 border-white/5">
+        <CardHeader><CardTitle className="font-heading">Game Plan</CardTitle></CardHeader>
+        <CardContent className="space-y-3 text-sm text-slate-400">
+          <div>No actionable pattern-based plan. Try a clearer or more recent chart section.</div>
+          <div>No patterns detected by the model.</div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card className="bg-slate-900/70 border-white/5">
       <CardHeader><CardTitle className="font-heading">Game Plan</CardTitle></CardHeader>
       <CardContent className="space-y-3">
+        {insights.trend === "Not found" && insights.neutralOnly && (
+          <div className="text-sm text-slate-400">
+            Neutral-only patterns detected; use breakout direction on triangle/trendline for confirmation.
+          </div>
+        )}
+        {insights.trend === "Mixed" && FEATURE_FUTURE && insights.future !== "Not found" &&
+          (insights.patternTrend === "Bullish" || insights.patternTrend === "Bearish") && (
+          <div className="text-sm text-slate-400">
+            Future model suggests {insights.future} while pattern signals are {insights.patternTrend.toLowerCase()}. Treat as Mixed until confirmation.
+          </div>
+        )}
         <Section title="Entry & Exit Strategy" defaultOpen>
           <ul className="list-disc ml-5 space-y-1">
             <li><strong>Head & Shoulders (Top/Bottom):</strong> trade the neckline break; stop above/below neckline; target ≈ head↔neckline distance.</li>
@@ -230,6 +273,7 @@ export function PatternsTab({ ticker }) {
       fd.append("file", file);
       fd.append("interval", "auto");
       fd.append("withOverlay", "false");
+      fd.append("withFuture", FEATURE_FUTURE ? "true" : "false");
 
       const res = await fetch(`${API_BASE}/patterns/detect-image`, { method:"POST", body: fd });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -245,6 +289,7 @@ export function PatternsTab({ ticker }) {
   }
 
   const imgSrc = imgBlobUrl || result?.rawImageUrl || result?.imageUrl || null;
+  const insights = result ? computeInsights(result.detections || [], FEATURE_FUTURE ? result.future : null, result.combinedTrend) : null;
 
   return (
     <div className="space-y-6">
@@ -260,16 +305,16 @@ export function PatternsTab({ ticker }) {
         </CardHeader>
         <CardContent className="space-y-4">
           <UploadBar file={file} setFile={setFile} onDetect={onDetect} loading={loading} analyzedAt={analyzedAt} />
-          <ChartWithOverlay imgSrc={imgSrc} detections={result?.detections || []} />
+          <ChartWithOverlay imgSrc={imgSrc} detections={result?.detections || []} future={FEATURE_FUTURE ? result?.future : null} />
           {err && <div className="text-sm text-red-400">{String(err.message || err)}</div>}
         </CardContent>
       </Card>
 
       {/* Render Insights/Plan ONLY after backend returns */}
-      {result && !loading && (
+      {result && !loading && insights && (
         <>
-          <KeyInsights detections={result?.detections || []} />
-          <GamePlan detections={result?.detections || []} />
+          <KeyInsights insights={insights} />
+          <GamePlan detections={result?.detections || []} insights={insights} />
         </>
       )}
 

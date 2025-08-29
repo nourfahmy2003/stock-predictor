@@ -158,6 +158,7 @@ export default function PatternsPage() {
               <GamePlan
                 patterns={result.gamePlan.recognizedPatterns}
                 gamePlan={result.gamePlan}
+                insights={result.insights}
                 onHover={setHoverIdx}
               />
             </CardContent>
@@ -248,11 +249,20 @@ function ChartWithOverlay({ imgSrc, detections, showBoxes, hoverIdx, onDrop }) {
 
 function KeyInsights({ insights }) {
   return (
-    <div className="flex flex-wrap gap-3">
-      <Chip label="Trend" value={insights.trend} />
-      <Chip label="Signal" value={insights.signal} />
-      <Chip label="Risk Level" value={insights.risk} />
-      <Chip label="Volume" value={insights.volume} muted />
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-3">
+        <Chip label="Trend" value={insights.trend} muted={insights.trend === "Not found"} />
+        <Chip label="Signal" value={insights.signal} muted={insights.signal === "N/A"} />
+        <Chip label="Risk" value={insights.risk} muted={insights.risk === "N/A"} />
+        <Chip label="Volume" value={insights.volume} muted />
+      </div>
+      {insights.trend === "Not found" && (
+        <p className="text-xs text-muted-foreground">
+          {insights.hasDetections
+            ? "Only neutral structures detected (e.g., triangle/trendline). Direction is not inferred."
+            : "No directional pattern detected in the uploaded image."}
+        </p>
+      )}
     </div>
   );
 }
@@ -264,14 +274,30 @@ function Chip({ label, value, muted }) {
         muted ? "bg-slate-700 text-slate-400" : "bg-slate-800 text-slate-100"
       }`}
     >
-      {label} <strong className="ml-1">{value}</strong>
+      {label}: <strong className="ml-1">{value}</strong>
     </span>
   );
 }
 
-function GamePlan({ patterns, gamePlan, onHover }) {
+function GamePlan({ patterns, gamePlan, insights, onHover }) {
+  if (insights.trend === "Not found" && !insights.hasDetections) {
+    return (
+      <div className="space-y-2 text-sm text-slate-400">
+        <div>
+          No actionable pattern-based plan. Try a clearer or more recent chart section.
+        </div>
+        <div>No patterns detected by the model.</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
+      {insights.trend === "Not found" && insights.neutralOnly && (
+        <div className="text-sm text-slate-400">
+          Neutral-only patterns detected; use breakout direction on triangle/trendline for confirmation.
+        </div>
+      )}
       <details open>
         <summary className="cursor-pointer text-sm font-semibold">
           Entry & Exit Strategy

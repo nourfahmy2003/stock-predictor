@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import useSWR from "swr";
 import { useTheme } from "next-themes";
 import { useReducedMotion } from "framer-motion";
@@ -27,6 +27,18 @@ const RANGE_RULES = {
   '1y': { step: { months: 1 } },
   '5y': { step: { years: 1 } },
 };
+
+const OPTION_CONFIG = {
+  '1m': { range: '1d', interval: '1m', rangeKey: '1m', liveMs: 60_000 },
+  '5m': { range: '5d', interval: '5m', rangeKey: '5m', liveMs: 5 * 60_000 },
+  '1H': { range: '1mo', interval: '1h', rangeKey: '1d', liveMs: 60 * 60_000 },
+  '1D': { range: '1y', interval: '1d', rangeKey: '1y', liveMs: 24 * 60 * 60_000 },
+  '3M': { range: '3mo', interval: '1d', rangeKey: '3mo', liveMs: 24 * 60 * 60_000 },
+  '1Y': { range: '1y', interval: '1d', rangeKey: '1y', liveMs: 24 * 60 * 60_000 },
+  '5Y': { range: '5y', interval: '1wk', rangeKey: '5y', liveMs: 7 * 24 * 60 * 60_000 },
+};
+
+const OPTIONS = Object.keys(OPTION_CONFIG);
 
 const ticksForWidth = (w) => Math.max(5, Math.min(12, Math.floor(w / 80)));
 
@@ -141,33 +153,52 @@ function generateTicks(rangeKey, series, width) {
   return ticks;
 }
 
-export default function PriceChart({
-  ticker,
-  range = "1y",
-  interval = "1d",
-  refreshMs = 30_000,
-  rangeKey,
-}) {
+export default function PriceChart({ ticker, refreshMs = 30_000 }) {
   const { theme } = useTheme();
   const reduceMotion = useReducedMotion();
-  const { resolvedTheme } = useTheme();          // <—
-  const isDark = resolvedTheme === "dark";       // <—
+  const { resolvedTheme } = useTheme(); // <—
+  const isDark = resolvedTheme === "dark"; // <—
   const axisColor = isDark ? "#ffffff" : "hsl(var(--muted-foreground))";
   const tickColor = isDark ? "#ffffff" : "hsl(var(--foreground))";
   const gridColor = isDark ? "rgba(255,255,255,0.15)" : "hsl(var(--border))";
 
+  const [option, setOption] = useState("1D");
+  const config = OPTION_CONFIG[option];
+
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const handle = () => setVisible(!document.hidden);
+    handle();
+    document.addEventListener("visibilitychange", handle);
+    return () => document.removeEventListener("visibilitychange", handle);
+  }, []);
+
   const { data, error, isLoading, mutate } = useSWR(
-    ticker ? `/chart/${ticker}?range=${range}&interval=${interval}` : null,
+    ticker ? `/chart/${ticker}?range=${config.range}&interval=${config.interval}` : null,
     fetcher,
-    { dedupingInterval: refreshMs, refreshInterval: refreshMs, keepPreviousData: true }
+    {
+      dedupingInterval: refreshMs,
+      refreshInterval: visible ? refreshMs : 0,
+      keepPreviousData: true,
+    }
   );
+
+  useEffect(() => {
+    if (visible) mutate();
+  }, [visible, mutate]);
+
+  const [lastUpdated, setLastUpdated] = useState(null);
+  useEffect(() => {
+    if (data) setLastUpdated(new Date());
+  }, [data]);
+
   const [width, setWidth] = useState(0);
 
   const series = useMemo(
     () => (data?.series || []).map((p) => ({ ...p, ts: new Date(p.date).getTime() })),
     [data]
   );
-  const rk = rangeKey || range;
+  const rk = config.rangeKey;
   const ticks = useMemo(() => generateTicks(rk, series, width), [rk, series, width]);
 
   const { prices, domain, yTicks, last } = useMemo(() => {
@@ -185,6 +216,13 @@ export default function PriceChart({
     const last = series[series.length - 1];
     return { prices, domain, yTicks, last };
   }, [series]);
+
+  const isLive = last ? Date.now() - last.ts < config.liveMs : false;
+
+  const tz = data?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const fmtUpdated = lastUpdated
+    ? formatDate(lastUpdated, { hour: '2-digit', minute: '2-digit', second: '2-digit' }, tz)
+    : '--';
 
   if (isLoading) {
     return (
@@ -223,8 +261,6 @@ export default function PriceChart({
   const tooltipBg =
     theme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)";
 
-  const tz = data?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-
   const formatY = (v) =>
     new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -235,6 +271,25 @@ export default function PriceChart({
 
   return (
     <div className="h-80 w-full  text-foreground" aria-live="polite">
+      <div className="flex items-center justify-end gap-2 mb-2">
+        {OPTIONS.map((opt) => (
+          <button
+            key={opt}
+            onClick={() => setOption(opt)}
+            className={`px-2 py-1 text-xs rounded-md border border-border ${
+              option === opt
+                ? "bg-primary text-primary-foreground"
+                : "bg-background text-muted-foreground"
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+        {isLive && (
+          <span className="px-1 py-0.5 text-[10px] bg-red-500 text-white rounded">LIVE</span>
+        )}
+        <span className="text-xs text-muted-foreground">Updated {fmtUpdated}</span>
+      </div>
       <ResponsiveContainer width="100%" height="100%" onResize={(w) => setWidth(w)}>
         <AreaChart
           data={series}

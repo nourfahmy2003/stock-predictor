@@ -10,11 +10,6 @@ import PriceChart from "@/components/stock/PriceChart";
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
-import {
-  INTERVAL_OPTIONS,
-  CHART_PARAMS,
-  REFRESH_MS,
-} from "@/lib/chart-params";
 import FilingsPanel from "@/components/filings/FilingsPanel";
 
 const PredictionPanel = dynamic(() => import("@/components/stock/prediction-panel"), { ssr: false });
@@ -33,8 +28,6 @@ export default function TickerPage() {
   const ticker = params.ticker?.toString().toUpperCase()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState('overview')
-  const [chartInterval, setChartInterval] = useState('1y')
-
   useEffect(() => {
     const tab = searchParams.get('tab')
     if (tab) setActiveTab(tab)
@@ -102,29 +95,12 @@ export default function TickerPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader className="flex items-center justify-between">
+                  <CardHeader>
                     <CardTitle className="font-heading">Price Chart</CardTitle>
-                    <select
-                      value={chartInterval}
-                      onChange={(e) => setChartInterval(e.target.value)}
-                      className="border rounded px-2 py-1 bg-background text-sm"
-                    >
-                      {INTERVAL_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
                   </CardHeader>
                   <CardContent>
                     <div className="h-72">
-                      <PriceChart
-                        ticker={ticker}
-                        range={CHART_PARAMS[chartInterval].range}
-                        interval={CHART_PARAMS[chartInterval].interval}
-                        refreshMs={REFRESH_MS[chartInterval]}
-                        rangeKey={chartInterval}
-                      />
+                      <PriceChart ticker={ticker} />
                     </div>
                   </CardContent>
                 </Card>

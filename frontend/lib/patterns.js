@@ -17,23 +17,59 @@ export const NORMALIZE = {
   "stockline": "StockLine",
 };
 
-export function computeInsights(dets) {
+export function computeInsights(dets, future = null, combinedTrend = null) {
   const bullishSet = new Set(["Head and shoulders bottom", "W_Bottom"]);
   const bearishSet = new Set(["Head and shoulders top", "M_Head"]);
+  const neutralSet = new Set(["Triangle", "StockLine"]);
+
   let bullish = 0,
     bearish = 0;
   for (const d of dets) {
     if (bullishSet.has(d.label)) bullish++;
     if (bearishSet.has(d.label)) bearish++;
   }
-  const trend = bullish && !bearish ? "Bullish" : bearish && !bullish ? "Bearish" : bullish || bearish ? "Mixed" : "Mixed";
-  const strong = dets.some((d) => d.conf >= 0.75);
-  let signal = "Watch";
-  if (strong && bullish && !bearish) signal = "Add to Watchlist";
-  if (strong && bearish && !bullish) signal = "Reduce";
-  const n = dets.length;
-  const risk = n <= 1 ? "Low" : n === 2 ? "Medium" : "High";
-  return { trend, signal, risk, volume: "Not inferred" };
+
+  const hasDetections = dets.length > 0;
+  const neutralOnly = hasDetections && dets.every((d) => neutralSet.has(d.label));
+
+  let patternTrend = "Not found";
+  if (!neutralOnly && hasDetections) {
+    if (bullish > 0 && bearish === 0) patternTrend = "Bullish";
+    else if (bearish > 0 && bullish === 0) patternTrend = "Bearish";
+    else if (bullish > 0 && bearish > 0) patternTrend = "Mixed";
+  }
+
+  let trend = combinedTrend ?? patternTrend;
+  const futureDir = future?.direction ?? "Not found";
+  if (futureDir !== "Not found") {
+    if (patternTrend === "Bullish" && futureDir === "Down") trend = "Mixed";
+    else if (patternTrend === "Bearish" && futureDir === "Up") trend = "Mixed";
+    else if (futureDir === "Up") trend = "Bullish";
+    else if (futureDir === "Down") trend = "Bearish";
+  }
+
+  let signal = "N/A";
+  let risk = "N/A";
+  if (trend !== "Not found") {
+    const strong = dets.some((d) => d.conf >= 0.75) || (future?.conf ?? 0) >= 0.75;
+    signal = "Watch";
+    if (strong && trend === "Bullish") signal = "Add to Watchlist";
+    if (strong && trend === "Bearish") signal = "Reduce";
+    const n = dets.length;
+    risk = n <= 1 ? "Low" : n === 2 ? "Medium" : "High";
+  }
+
+  return {
+    trend,
+    signal,
+    risk,
+    volume: "Not inferred",
+    hasDetections,
+    neutralOnly,
+    patternTrend,
+    future: futureDir,
+    count: dets.length,
+  };
 }
 
 export function buildGamePlan(dets) {

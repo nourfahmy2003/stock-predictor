@@ -3,11 +3,7 @@
 import { useEffect, useState } from 'react';
 import PriceChart from '@/components/stock/PriceChart';
 import { api } from '@/lib/api';
-import {
-  INTERVAL_OPTIONS,
-  REFRESH_MS,
-  CHART_PARAMS,
-} from '@/lib/chart-params';
+import { INTERVAL_OPTIONS, REFRESH_MS } from '@/lib/chart-params';
 
 export default function PatternsOverviewPage() {
   const [interval, setIntervalState] = useState('1y');
@@ -58,13 +54,7 @@ export default function PatternsOverviewPage() {
       </div>
       {selected && (
         <div className="border rounded p-2">
-          <PriceChart
-            ticker={selected}
-            range={CHART_PARAMS[interval].range}
-            interval={CHART_PARAMS[interval].interval}
-            refreshMs={REFRESH_MS[interval]}
-            rangeKey={interval}
-          />
+          <PriceChart ticker={selected} />
         </div>
       )}
       {loading ? (
