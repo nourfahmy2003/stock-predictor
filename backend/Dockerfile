@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ app/
+COPY notebooks/ notebooks/
+
+ENV NOTEBOOK_PATH=/app/notebooks/Stock_LSTM_10day.ipynb
 
 # Render will inject PORT
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
