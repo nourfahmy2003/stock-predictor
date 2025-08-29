@@ -29,7 +29,7 @@ export default function Navbar() {
 
           <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-6">
-              <Link
+              {/* <Link
                 href="/about"
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 font-body"
               >
@@ -40,7 +40,7 @@ export default function Navbar() {
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors duration-200 font-body"
               >
                 Pricing
-              </Link>
+              </Link> */}
             </div>
             <ThemeToggle />
           </div>
