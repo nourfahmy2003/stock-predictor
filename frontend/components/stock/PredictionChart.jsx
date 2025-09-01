@@ -4,189 +4,121 @@ import { useMemo, useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useReducedMotion } from "framer-motion";
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ReferenceLine,
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from "recharts";
 
-// Make human-friendly ticks between min..max
 function niceTicks(min, max, count = 5) {
-  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
-    return [min || 0, (max || 0) + 1];
-  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return [min || 0, (max || 0) + 1];
   const span = max - min;
-  const stepRaw = span / Math.max(1, count - 1);
-  const mag = Math.pow(10, Math.floor(Math.log10(stepRaw)));
-  const norm = stepRaw / mag;
-  const niceNorm = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
-  const step = niceNorm * mag;
-  const niceMin = Math.floor(min / step) * step;
-  const niceMax = Math.ceil(max / step) * step;
+  const mag = Math.pow(10, Math.floor(Math.log10(span / Math.max(1, count - 1))));
+  const nrm = (span / Math.max(1, count - 1)) / mag;
+  const base = nrm < 1.5 ? 1 : nrm < 3 ? 2 : nrm < 7 ? 5 : 10;
+  const step = base * mag;
+  const lo = Math.floor(min / step) * step;
+  const hi = Math.ceil(max / step) * step;
   const ticks = [];
-  for (let v = niceMin; v <= niceMax + 1e-9; v += step) ticks.push(+v.toFixed(12));
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(12));
   return ticks;
 }
 
 export default function PredictionChart({ data }) {
+  // 1) All hooks first, always
   const { resolvedTheme } = useTheme();
   const reduceMotion = useReducedMotion();
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
   const isSmall = width < 640;
 
-  // Normalize input: add numeric timestamp "ts" for time scale
-  const series = useMemo(() => {
-    return (data || [])
+  const series = useMemo(() => (
+    (data || [])
       .filter((d) => d.part !== "context")
-      .map((d) => ({
-        ...d,
-        ts: new Date(d.date).getTime(),
-      }))
-      .filter((d) => Number.isFinite(d.ts));
-  }, [data]);
+      .map((d) => ({ ...d, ts: new Date(d.date).getTime() }))
+      .filter((d) => Number.isFinite(d.ts))
+  ), [data]);
 
-  // Y domain & ticks (padded + nice)
   const yInfo = useMemo(() => {
-    const prices = series.flatMap((d) => [d.actual, d.pred]).filter(Number.isFinite);
-    if (prices.length === 0) return { yMin: 0, yMax: 1, yTicks: [0, 1] };
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
+    const vals = series.flatMap((d) => [d.actual, d.pred]).filter(Number.isFinite);
+    if (!vals.length) return { yMin: 0, yMax: 1, yTicks: [0, 1] };
+    const min = Math.min(...vals), max = Math.max(...vals);
     const pad = (max - min || 1) * 0.08;
-    const lo = Math.max(0, min - pad);
-    const hi = max + pad;
-    const count = height <= 360 ? 4 : height <= 560 ? 5 : 6;
-    const ticks = niceTicks(lo, hi, count);
+    const ticks = niceTicks(Math.max(0, min - pad), max + pad, height <= 360 ? 4 : height <= 560 ? 5 : 6);
     return { yMin: ticks[0], yMax: ticks[ticks.length - 1], yTicks: ticks.slice(1) };
   }, [series, height]);
   const { yMin, yMax, yTicks } = yInfo;
 
-  // X ticks: ~6 evenly spaced dates
   const xTicks = useMemo(() => {
-    if (series.length === 0) return [];
-    const minTs = series[0].ts;
-    const maxTs = series[series.length - 1].ts;
-    const n = 6;
-    const step = (maxTs - minTs) / (n - 1 || 1);
-    return Array.from({ length: n }, (_, i) => Math.round(minTs + i * step));
+    if (!series.length) return [];
+    const a = series[0].ts, b = series[series.length - 1].ts;
+    const n = 6, step = (b - a) / (n - 1 || 1);
+    return Array.from({ length: n }, (_, i) => Math.round(a + i * step));
   }, [series]);
 
-  const dtf = useMemo(
-    () =>
-      new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "2-digit",
-      }),
+  // These hooks/derivations must also run every render (guard internally if needed)
+  const root = useMemo(
+    () => (typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null),
     []
   );
-
-  const fmtCurrency = (v) => (Number.isFinite(v) ? `$${v.toFixed(2)}` : "N/A");
-
-  const forecastStartTs = useMemo(() => {
-    const f = series.find((d) => d.part === "forecast");
-    return f && f.ts;
-  }, [series]);
-
-  const lineWidth = isSmall ? 2.5 : 3;
-  const fontSize = isSmall ? 10 : 12;
-
-  if (!mounted) {
-    return <div className="h-[320px] w-full rounded-md border border-border animate-pulse" />;
-  }
-
-  const root = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
   const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
   const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ccc");
-  const tooltipBg =
-    root?.getPropertyValue("--card")?.trim() ||
-    (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
+  const tooltipBg = root?.getPropertyValue("--card")?.trim() || (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
+  const dtf = useMemo(() => new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" }), []);
 
-  const renderTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const row = payload[0].payload;
-      return (
-        <div
-          style={{
-            backgroundColor: tooltipBg,
-            border: "1px solid hsl(var(--border))",
-            padding: "0.5rem",
-          }}
-        >
-          <div>Date: {dtf.format(new Date(row.ts))}</div>
-          <div>Actual: {fmtCurrency(row.actual)}</div>
-          <div>Predicted: {fmtCurrency(row.pred)}</div>
-        </div>
-      );
-    }
-    return null;
-  };
+  const forecastStartTs = useMemo(() => series.find((d) => d.part === "forecast")?.ts, [series]);
+  const lineWidth = isSmall ? 2.5 : 3;
+  const fontSize  = isSmall ? 10 : 12;
+  const fmtCurrency = (v) => (Number.isFinite(v) ? `$${v.toFixed(2)}` : "N/A");
+
+  // 2) Then render (can branch now — hook order is fixed above)
+  if (!mounted) {
+    return <div className="h-[320px] w-full rounded-2xl bg-card animate-pulse" />;
+  }
 
   return (
-    <ResponsiveContainer width="100%" height="100%" onResize={(w, h) => { setWidth(w); setHeight(h); }}>
-      <LineChart data={series} margin={{ left: 40, right: 20, top: 56, bottom: 64 }}>
-        <CartesianGrid strokeOpacity={0.1} stroke={gridColor} />
-        <XAxis
-          dataKey="ts"
-          type="number"
-          domain={["dataMin", "dataMax"]}
-          scale="time"
-          ticks={xTicks}
-          tick={{ fill: axisColor, fontSize }}
-          tickFormatter={(ts) => dtf.format(new Date(ts))}
-          angle={-35}
-          textAnchor="end"
-          height={80}
-          label={{
-            value: "Date",
-            position: "insideBottomRight",
-            offset: -10,
-            fill: axisColor,
-            fontSize,
-          }}
-        />
-        <YAxis
-          domain={[yMin, yMax]}
-          ticks={yTicks}
-          tick={{ fill: axisColor, fontSize }}
-          tickFormatter={(v) => `$${Math.round(v)}`}
-          label={{
-            value: "Price (USD)",
-            angle: -90,
-            position: "insideLeft",
-            offset: -6,
-            fill: axisColor,
-            fontSize,
-          }}
-        />
-        <Tooltip content={renderTooltip} cursor={{ stroke: axisColor, strokeDasharray: "3 3", strokeOpacity: 0.4 }} />
-        <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 8, fontSize }} />
-        {forecastStartTs && (
-          <ReferenceLine
-            x={forecastStartTs}
-            stroke={axisColor}
-            strokeDasharray="3 3"
-            label={{ value: "Forecast starts", position: "top", fill: axisColor, fontSize }}
-          />
-        )}
-        <Line dataKey="actual" name="Actual" stroke="#2563eb" dot={false} strokeWidth={lineWidth} isAnimationActive={!reduceMotion} />
-        <Line
-          dataKey="pred"
-          name="Predicted"
-          stroke="#f97316"
-          dot={false}
-          strokeDasharray="4 2"
-          strokeWidth={lineWidth}
-          isAnimationActive={!reduceMotion}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <div className="w-full bg-card rounded-2xl p-4 sm:p-6">
+      <div className="sm:overflow-visible overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none]"
+           style={{ WebkitOverflowScrolling: "touch" }}>
+        <div className="min-w-[720px] sm:min-w-0">
+          <div className="min-h-[280px] h-[60vh] max-h-[520px]">
+            <ResponsiveContainer width="100%" height="100%" onResize={(w,h)=>{setWidth(w);setHeight(h);}}>
+              <LineChart data={series} margin={{ left: 40, right: 20, top: 56, bottom: isSmall ? 60 : 64 }}>
+                <CartesianGrid strokeOpacity={0.1} stroke={gridColor} />
+                <XAxis
+                  dataKey="ts" type="number" domain={["dataMin","dataMax"]} scale="time"
+                  ticks={xTicks} tick={{ fill: axisColor, fontSize }}
+                  tickFormatter={(ts)=>dtf.format(new Date(ts))}
+                  angle={-35} textAnchor="end" height={isSmall?76:80}
+                  label={{ value:"Date", position:"insideBottomRight", offset:-10, fill:axisColor, fontSize }}
+                />
+                <YAxis
+                  domain={[yMin,yMax]} ticks={yTicks} tick={{ fill:axisColor, fontSize }}
+                  tickFormatter={(v)=>`$${Math.round(v)}`}
+                  label={{ value:"Price (USD)", angle:-90, position:"insideLeft", offset:-6, fill:axisColor, fontSize }}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: tooltipBg, border:"1px solid hsl(var(--border))", padding:"0.5rem", borderRadius:6 }}
+                  formatter={(value, name, ctx)=>{
+                    const row = ctx?.payload;
+                    return [name==="actual"?fmtCurrency(row.actual):fmtCurrency(row.pred), name==="actual"?"Actual":"Predicted"];
+                  }}
+                  labelFormatter={(ts)=>dtf.format(new Date(ts))}
+                />
+                <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 8, fontSize }} />
+                {forecastStartTs && (
+                  <ReferenceLine x={forecastStartTs} stroke={axisColor} strokeDasharray="3 3"
+                    label={{ value:"Forecast starts", position:"top", fill:axisColor, fontSize }} />
+                )}
+                <Line dataKey="actual" name="Actual" stroke="#2563eb" dot={false} strokeWidth={lineWidth} isAnimationActive={!reduceMotion} />
+                <Line dataKey="pred"   name="Predicted" stroke="#f97316" dot={false} strokeDasharray="4 2" strokeWidth={lineWidth} isAnimationActive={!reduceMotion} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

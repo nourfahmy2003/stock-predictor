@@ -8,7 +8,7 @@ import { OverviewSection } from "@/components/stock/overview-section";
 import dynamic from "next/dynamic";
 const PriceChart = dynamic(() => import("@/components/stock/PriceChart"), { ssr: false });
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import FilingsPanel from "@/components/filings/FilingsPanel";
 
