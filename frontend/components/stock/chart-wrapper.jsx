@@ -34,7 +34,7 @@ const ChartWrapper = React.forwardRef(
               }
             }}
           >
-            <div className="min-w-[720px] sm:min-w-0 pr-2">
+            <div className="min-w-full sm:min-w-0 pr-2 pb-4">
               <div className="min-h-[320px] h-[60vh] max-h-[520px] w-full">{children}</div>
             </div>
           </div>

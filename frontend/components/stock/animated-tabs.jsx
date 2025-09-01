@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 export function AnimatedTabs({ tabs, activeTab, onTabChange, className }) {
   return (
     <div className={cn("border-b border-border", className)}>
-      <nav className="flex space-x-8" role="tablist">
+      <nav className="flex flex-wrap justify-center space-x-8" role="tablist">
         {tabs.map((tab) => (
           <motion.button
             key={tab.id}

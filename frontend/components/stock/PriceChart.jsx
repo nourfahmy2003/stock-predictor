@@ -419,7 +419,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
 
   return (
     <div className="w-full text-foreground" aria-live="polite">
-      <div className="-mx-4 sm:mx-0 px-4 sm:px-0 mb-2">
+      <div className="px-4 sm:px-0 mb-2">
         <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap">
           {OPTIONS.map((opt) => (
             <button
@@ -451,7 +451,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
             }
           }}
         >
-          <div className="min-w-[720px] sm:min-w-0 pr-2">
+          <div className="min-w-full sm:min-w-0 pr-2 pb-4">
             <div className="h-[30vh] max-h-[400px] min-h-[280px]">
               <ResponsiveContainer
                 width="100%"
