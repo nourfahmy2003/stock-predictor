@@ -277,13 +277,11 @@ function generateTicks(rangeKey, series, width) {
 
 
 export default function PriceChart({ ticker, refreshMs = 30_000 }) {
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const reduceMotion = useReducedMotion();
-  const { resolvedTheme } = useTheme(); // <—
-  const isDark = resolvedTheme === "dark"; // <—
-  const axisColor = isDark ? "#ffffff" : "hsl(var(--muted-foreground))";
-  const tickColor = isDark ? "#ffffff" : "hsl(var(--foreground))";
-  const gridColor = isDark ? "rgba(255,255,255,0.15)" : "hsl(var(--border))";
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const [option, setOption] = useState("1D");
   const config = OPTION_CONFIG[option];
@@ -317,6 +315,19 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
 
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
+  const isSmall = width < 640;
+
+  if (!mounted) {
+    return <div className="h-[320px] w-full rounded-md border border-border animate-pulse" />;
+  }
+
+  const root = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
+  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
+  const tickColor = root?.getPropertyValue("--foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
+  const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ddd");
+  const tooltipBg =
+    root?.getPropertyValue("--card")?.trim() ||
+    (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
 
   const series = useMemo(
     () => (data?.series || []).map((p) => ({ ...p, ts: new Date(p.date).getTime() })),
@@ -345,7 +356,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
     const lo = Math.max(0, min - pad);
     const hi = max + pad;
 
-    const count = ticksForHeight(height);       // 4 / 5 / 6 (fixed)
+    const count = ticksForHeight(height); // 4 / 5 / 6 (fixed)
     const ticks = buildFixedTicks(lo, hi, count);
     const domain = [ticks[0], ticks[ticks.length - 1]];
 
@@ -364,7 +375,6 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
     const last = series[series.length - 1];
     return { prices, domain, yTicks: ticks, last, formatY: formatter };
   }, [series, height]);
-
 
   const isLive = last ? Date.now() - last.ts < config.liveMs : false;
 
@@ -407,115 +417,126 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
     );
   }
 
-  const tooltipBg =
-    theme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)";
-
   return (
-    <div className="h-80 w-full  text-foreground" aria-live="polite">
-      <div className="flex items-center justify-end gap-2 mb-2">
-        {OPTIONS.map((opt) => (
-          <button
-            key={opt}
-            onClick={() => setOption(opt)}
-            className={`px-2 py-1 text-xs rounded-md border border-border ${option === opt
-              ? "bg-primary text-primary-foreground"
-              : "bg-background text-muted-foreground"
-              }`}
-          >
-            {opt}
-          </button>
-        ))}
-        {isLive && (
-          <span className="px-1 py-0.5 text-[10px] bg-red-500 text-white rounded">LIVE</span>
-        )}
-        <span className="text-xs text-muted-foreground">Updated {fmtUpdated}</span>
-      </div>
-      <ResponsiveContainer
-        width="100%"
-        height="100%"
-        onResize={(w, h) => {
-          setWidth(w);
-          setHeight(h);
-        }}
-      >
-        <AreaChart
-          data={series}
-          margin={{ top: 22, right: 32, bottom: 42, left: 36 }}
-        >
-          <defs>
-            {/* visible line/fill in dark mode */}
-            <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.06} />
-            </linearGradient>
-          </defs>
-
-          <CartesianGrid
-            stroke={gridColor}
-            strokeOpacity={0.12}
-            vertical={false}
-          />
-
-          <XAxis
-            dataKey="ts"
-            ticks={ticks}
-            tickFormatter={(v, i) =>
-              formatTick(rk, new Date(v), i > 0 ? new Date(ticks[i - 1]) : null, width, tz)
-            }
-            tick={{ fill: tickColor, fontSize: 12 }}
-            axisLine={{ stroke: axisColor, opacity: 0.35 }}
-            tickLine={{ stroke: axisColor, opacity: 0.35 }}
-            minTickGap={24}
-            tickMargin={8}
-            height={44}
-            type="number"
-            domain={["dataMin", "dataMax"]}
-          />
-
-          <YAxis
-            domain={domain}
-            ticks={yTicks}
-            tickFormatter={formatY}
-            tick={{ fill: tickColor, fontSize: 12 }}
-            axisLine={{ stroke: axisColor, opacity: 0.35 }}
-            tickLine={{ stroke: axisColor, opacity: 0.35 }}
-          />
-
-          <Tooltip
-            contentStyle={{
-              backgroundColor: tooltipBg,
-              border: "1px solid hsl(var(--border))",
-              borderRadius: "0.375rem",
-              color: "hsl(var(--foreground))",
-              padding: "0.5rem",
-            }}
-            labelFormatter={(v) => formatTooltip(new Date(v), rk, tz)}
-            formatter={(value) => [formatY(value), "Close"]}
-          />
-
-          <Area
-            type="monotone"
-            dataKey="close"
-            stroke="#60a5fa"                 // ✅ visible line
-            strokeWidth={2}
-            fill="url(#priceFill)"           // soft gradient fill
-            dot={false}
-            activeDot={{ r: 4 }}
-            isAnimationActive={!reduceMotion}
-          />
-
-          {last && (
-            <ReferenceDot
-              x={last.ts}
-              y={last.close}
-              r={4}
-              fill="#60a5fa"
-              stroke="hsl(var(--background))"
-              strokeWidth={1}
-            />
+    <div className="w-full text-foreground" aria-live="polite">
+      <div className="-mx-4 sm:mx-0 px-4 sm:px-0 mb-2">
+        <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap">
+          {OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setOption(opt)}
+              className={`w-full sm:w-auto px-3 py-2 rounded-md border min-h-[40px] text-sm ${option === opt
+                ? "bg-primary text-primary-foreground"
+                : "bg-background text-muted-foreground"
+                }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex items-center gap-2 justify-end">
+          {isLive && (
+            <span className="px-1 py-0.5 text-[10px] bg-red-500 text-white rounded">LIVE</span>
           )}
-        </AreaChart>
-      </ResponsiveContainer>
+          <span className="text-xs text-muted-foreground">Updated {fmtUpdated}</span>
+        </div>
+      </div>
+      <div className="relative">
+        <div
+          className="sm:overflow-visible overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none]"
+          onWheel={(e) => {
+            if (window.innerWidth < 640 && Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
+              e.currentTarget.scrollLeft += e.deltaY;
+              e.preventDefault();
+            }
+          }}
+        >
+          <div className="min-w-[720px] sm:min-w-0 pr-2">
+            <div style={{ height: "60vh", maxHeight: 520, minHeight: 320 }}>
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                onResize={(w, h) => {
+                  setWidth(w);
+                  setHeight(h);
+                }}
+              >
+                <AreaChart data={series} margin={{ top: 22, right: 32, bottom: 42, left: 36 }}>
+                  <defs>
+                    <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.06} />
+                    </linearGradient>
+                  </defs>
+
+                  <CartesianGrid stroke={gridColor} strokeOpacity={0.12} vertical={false} />
+
+                  <XAxis
+                    dataKey="ts"
+                    ticks={ticks}
+                    tickFormatter={(v, i) =>
+                      formatTick(rk, new Date(v), i > 0 ? new Date(ticks[i - 1]) : null, width, tz)
+                    }
+                    tick={{ fill: tickColor, fontSize: isSmall ? 10 : 12 }}
+                    axisLine={{ stroke: axisColor, opacity: 0.35 }}
+                    tickLine={{ stroke: axisColor, opacity: 0.35 }}
+                    minTickGap={24}
+                    tickMargin={8}
+                    height={isSmall ? 64 : 44}
+                    angle={isSmall ? -35 : 0}
+                    textAnchor={isSmall ? "end" : "middle"}
+                    type="number"
+                    domain={["dataMin", "dataMax"]}
+                  />
+
+                  <YAxis
+                    domain={domain}
+                    ticks={yTicks}
+                    tickFormatter={formatY}
+                    tick={{ fill: tickColor, fontSize: isSmall ? 10 : 12 }}
+                    axisLine={{ stroke: axisColor, opacity: 0.35 }}
+                    tickLine={{ stroke: axisColor, opacity: 0.35 }}
+                  />
+
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: tooltipBg,
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "0.375rem",
+                      color: "hsl(var(--foreground))",
+                      padding: "0.5rem",
+                    }}
+                    labelFormatter={(v) => formatTooltip(new Date(v), rk, tz)}
+                    formatter={(value) => [formatY(value), "Close"]}
+                  />
+
+                  <Area
+                    type="monotone"
+                    dataKey="close"
+                    stroke="#60a5fa"
+                    strokeWidth={2}
+                    fill="url(#priceFill)"
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                    isAnimationActive={!reduceMotion}
+                  />
+
+                  {last && (
+                    <ReferenceDot
+                      x={last.ts}
+                      y={last.close}
+                      r={4}
+                      fill="#60a5fa"
+                      stroke="hsl(var(--background))"
+                      strokeWidth={1}
+                    />
+                  )}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

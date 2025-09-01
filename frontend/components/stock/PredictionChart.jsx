@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useReducedMotion } from "framer-motion";
 import {
   ResponsiveContainer,
   LineChart,
@@ -33,17 +34,25 @@ function niceTicks(min, max, count = 5) {
 }
 
 export default function PredictionChart({ data }) {
-  const { theme } = useTheme();
-  const axisColor = theme === "dark" ? "#fff" : "hsl(var(--foreground))";
-  const tooltipBg = theme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)";
+  const { resolvedTheme } = useTheme();
+  const reduceMotion = useReducedMotion();
 
-  const [isSmall, setIsSmall] = useState(false);
-  useEffect(() => {
-    const onResize = () => setIsSmall(window.innerWidth < 640);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return <div className="h-[320px] w-full rounded-md border border-border animate-pulse" />;
+  }
+
+  const root = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
+  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
+  const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ccc");
+  const tooltipBg =
+    root?.getPropertyValue("--card")?.trim() ||
+    (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
+
+  const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(0);
+  const isSmall = width < 640;
 
   // Normalize input: add numeric timestamp "ts" for time scale
   const series = useMemo(() => {
@@ -65,9 +74,10 @@ export default function PredictionChart({ data }) {
     const pad = (max - min || 1) * 0.08;
     const lo = Math.max(0, min - pad);
     const hi = max + pad;
-    const ticks = niceTicks(lo, hi, 5);
+    const count = height <= 360 ? 4 : height <= 560 ? 5 : 6;
+    const ticks = niceTicks(lo, hi, count);
     return { yMin: ticks[0], yMax: ticks[ticks.length - 1], yTicks: ticks.slice(1) };
-  }, [series]);
+  }, [series, height]);
   const { yMin, yMax, yTicks } = yInfo;
 
   // X ticks: ~6 evenly spaced dates
@@ -120,57 +130,63 @@ export default function PredictionChart({ data }) {
   const fontSize = isSmall ? 10 : 12;
 
   return (
-    <div style={{ height: "60vh", maxHeight: 520, minHeight: 320 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={series} margin={{ left: 40, right: 20, top: 56, bottom: 64 }}>
-          <CartesianGrid strokeOpacity={0.1} stroke="hsl(var(--border))" />
-          <XAxis
-            dataKey="ts"
-            type="number"
-            domain={["dataMin", "dataMax"]}
-            scale="time"
-            ticks={xTicks}
-            tick={{ fill: axisColor, fontSize }}
-            tickFormatter={(ts) => dtf.format(new Date(ts))}
-            angle={-35}
-            textAnchor="end"
-            height={80}
-            label={{
-              value: "Date",
-              position: "insideBottomRight",
-              offset: -10,
-              fill: axisColor,
-              fontSize,
-            }}
+    <ResponsiveContainer width="100%" height="100%" onResize={(w, h) => { setWidth(w); setHeight(h); }}>
+      <LineChart data={series} margin={{ left: 40, right: 20, top: 56, bottom: 64 }}>
+        <CartesianGrid strokeOpacity={0.1} stroke={gridColor} />
+        <XAxis
+          dataKey="ts"
+          type="number"
+          domain={["dataMin", "dataMax"]}
+          scale="time"
+          ticks={xTicks}
+          tick={{ fill: axisColor, fontSize }}
+          tickFormatter={(ts) => dtf.format(new Date(ts))}
+          angle={-35}
+          textAnchor="end"
+          height={80}
+          label={{
+            value: "Date",
+            position: "insideBottomRight",
+            offset: -10,
+            fill: axisColor,
+            fontSize,
+          }}
+        />
+        <YAxis
+          domain={[yMin, yMax]}
+          ticks={yTicks}
+          tick={{ fill: axisColor, fontSize }}
+          tickFormatter={(v) => `$${Math.round(v)}`}
+          label={{
+            value: "Price (USD)",
+            angle: -90,
+            position: "insideLeft",
+            offset: -6,
+            fill: axisColor,
+            fontSize,
+          }}
+        />
+        <Tooltip content={renderTooltip} cursor={{ stroke: axisColor, strokeDasharray: "3 3", strokeOpacity: 0.4 }} />
+        <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 8, fontSize }} />
+        {forecastStartTs && (
+          <ReferenceLine
+            x={forecastStartTs}
+            stroke={axisColor}
+            strokeDasharray="3 3"
+            label={{ value: "Forecast starts", position: "top", fill: axisColor, fontSize }}
           />
-          <YAxis
-            domain={[yMin, yMax]}
-            ticks={yTicks}
-            tick={{ fill: axisColor, fontSize }}
-            tickFormatter={(v) => `$${Math.round(v)}`}
-            label={{
-              value: "Price (USD)",
-              angle: -90,
-              position: "insideLeft",
-              offset: -6,
-              fill: axisColor,
-              fontSize,
-            }}
-          />
-          <Tooltip content={renderTooltip} cursor={{ stroke: axisColor, strokeDasharray: "3 3", strokeOpacity: 0.4 }} />
-          <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 8, fontSize }} />
-          {forecastStartTs && (
-            <ReferenceLine
-              x={forecastStartTs}
-              stroke={axisColor}
-              strokeDasharray="3 3"
-              label={{ value: "Forecast starts", position: "top", fill: axisColor, fontSize }}
-            />
-          )}
-          <Line dataKey="actual" name="Actual" stroke="#2563eb" dot={false} strokeWidth={lineWidth} />
-          <Line dataKey="pred" name="Predicted" stroke="#f97316" dot={false} strokeDasharray="4 2" strokeWidth={lineWidth} />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+        )}
+        <Line dataKey="actual" name="Actual" stroke="#2563eb" dot={false} strokeWidth={lineWidth} isAnimationActive={!reduceMotion} />
+        <Line
+          dataKey="pred"
+          name="Predicted"
+          stroke="#f97316"
+          dot={false}
+          strokeDasharray="4 2"
+          strokeWidth={lineWidth}
+          isAnimationActive={!reduceMotion}
+        />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }

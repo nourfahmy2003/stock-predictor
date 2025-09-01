@@ -33,6 +33,25 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* No-flash: inline script decides initial class BEFORE React */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+(function(){
+  try {
+    var theme = localStorage.getItem('theme');
+    if (!theme) {
+      var m = window.matchMedia('(prefers-color-scheme: dark)');
+      theme = m.matches ? 'dark' : 'light';
+    }
+    var doc = document.documentElement;
+    if (theme === 'dark') doc.classList.add('dark'); else doc.classList.remove('dark');
+  } catch(e){}
+})();`,
+          }}
+        />
+      </head>
       <body
         className={`${poppins.variable} ${inter.variable} ${robotoMono.variable} antialiased bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100`}
       >

@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, Suspense, useEffect } from "react";
-import dynamic from "next/dynamic";
 import { useParams, useSearchParams } from "next/navigation";
 import { AnimatedTabs } from "@/components/stock/animated-tabs";
 import HeaderPrice from "@/components/stock/HeaderPrice";
 import { OverviewSection } from "@/components/stock/overview-section";
-import PriceChart from "@/components/stock/PriceChart";
+import dynamic from "next/dynamic";
+const PriceChart = dynamic(() => import("@/components/stock/PriceChart"), { ssr: false });
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";

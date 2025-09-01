@@ -25,7 +25,19 @@ const ChartWrapper = React.forwardRef(
               </div>
             </div>
           )}
-          <div className="min-h-[320px] w-full">{children}</div>
+          <div
+            className="sm:overflow-visible overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none]"
+            onWheel={(e) => {
+              if (window.innerWidth < 640 && Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
+                e.currentTarget.scrollLeft += e.deltaY;
+                e.preventDefault();
+              }
+            }}
+          >
+            <div className="min-w-[720px] sm:min-w-0 pr-2">
+              <div className="min-h-[320px] h-[60vh] max-h-[520px] w-full">{children}</div>
+            </div>
+          </div>
         </div>
       </Card>
     );

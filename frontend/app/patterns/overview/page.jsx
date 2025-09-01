@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import PriceChart from '@/components/stock/PriceChart';
+import dynamic from 'next/dynamic';
+const PriceChart = dynamic(() => import('@/components/stock/PriceChart'), { ssr: false });
 import { api } from '@/lib/api';
 import { INTERVAL_OPTIONS, REFRESH_MS } from '@/lib/chart-params';
 
