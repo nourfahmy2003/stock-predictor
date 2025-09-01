@@ -317,11 +317,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
   const [height, setHeight] = useState(0);
   const isSmall = width < 640;
 
-  if (!mounted) {
-    return <div className="h-[320px] w-full rounded-md border border-border animate-pulse" />;
-  }
-
-  const root = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
+  const root = mounted ? getComputedStyle(document.documentElement) : null;
   const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
   const tickColor = root?.getPropertyValue("--foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
   const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ddd");
@@ -382,6 +378,10 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
   const fmtUpdated = lastUpdated
     ? formatDate(lastUpdated, { hour: '2-digit', minute: '2-digit', second: '2-digit' }, tz)
     : '--';
+
+  if (!mounted) {
+    return <div className="h-[320px] w-full rounded-md border border-border animate-pulse" />;
+  }
 
   if (isLoading) {
     return (

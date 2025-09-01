@@ -1,7 +1,6 @@
 import PriceHeader from "@/components/stock/PriceHeader"
 import DayRange from "@/components/stock/DayRange"
-import dynamic from "next/dynamic"
-const PriceChart = dynamic(() => import("@/components/stock/PriceChart"), { ssr: false })
+import PriceChart from "@/components/stock/PriceChart.client"
 import { PredictionPanel } from "@/components/stock/prediction-panel"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
