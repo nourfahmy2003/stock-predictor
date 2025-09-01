@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import useSWR from "swr";
 import { useTheme } from "next-themes";
 import { useReducedMotion } from "framer-motion";
@@ -18,16 +18,6 @@ import { api } from "@/lib/api";
 
 const fetcher = (path) => api(path);
 
-const RANGE_RULES = {
-  "1m": { step: { hours: 1 } },
-  "5m": { step: { hours: 1 } },
-  "1d": { step: { hours: 1 } },
-  "1mo": { step: { weeks: 1 } },
-  "3mo": { step: { weeks: 2 } },
-  "1y": { step: { months: 1 } },
-  "5y": { step: { years: 1 } },
-};
-
 const OPTION_CONFIG = {
   "1m": { range: "1d",  interval: "1m",  rangeKey: "1m",  liveMs: 60_000 },
   "5m": { range: "5d",  interval: "5m",  rangeKey: "5m",  liveMs: 5 * 60_000 },
@@ -39,10 +29,7 @@ const OPTION_CONFIG = {
 };
 const OPTIONS = Object.keys(OPTION_CONFIG);
 
-// target ~ # of x ticks by width
 const ticksForWidth = (w) => (w <= 480 ? 5 : w <= 1024 ? 6 : 8);
-
-// exact target # of y ticks by height
 const ticksForHeight = (h) => (h <= 360 ? 4 : h <= 560 ? 5 : 6);
 
 function niceStep(rough) {
@@ -51,7 +38,6 @@ function niceStep(rough) {
   const base = n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10;
   return base * p;
 }
-
 function buildFixedTicks(min, max, count) {
   if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
     const v = Number.isFinite(min) ? min : 0;
@@ -61,16 +47,8 @@ function buildFixedTicks(min, max, count) {
   const step = niceStep(span / (count - 1));
   let lo = Math.floor(min / step) * step;
   let hi = lo + step * (count - 1);
-  if (hi < max) {
-    const need = Math.ceil((max - hi) / step);
-    lo += need * step;
-    hi = lo + step * (count - 1);
-  }
-  if (lo > min) {
-    const back = Math.ceil((lo - min) / step);
-    lo -= back * step;
-    hi = lo + step * (count - 1);
-  }
+  if (hi < max) { lo += Math.ceil((max - hi) / step) * step; hi = lo + step * (count - 1); }
+  if (lo > min) { lo -= Math.ceil((lo - min) / step) * step; hi = lo + step * (count - 1); }
   return Array.from({ length: count }, (_, i) => +((lo + i * step).toFixed(12)));
 }
 
@@ -78,16 +56,13 @@ function buildFixedTicks(min, max, count) {
 const firstOfMonthUTC = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
 const addMonthsUTC  = (d, n) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
 const janFirstUTC   = (y)   => new Date(Date.UTC(y, 0, 1));
-
 const monthsBetween = (a, b) =>
   (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth());
-
 const evenTicks = (minTs, maxTs, desired) => {
   if (desired <= 1 || minTs >= maxTs) return [minTs, maxTs];
   const step = (maxTs - minTs) / (desired - 1);
   return Array.from({ length: desired }, (_, i) => Math.round(minTs + i * step));
 };
-
 function monthlyTicks(startTs, endTs, desired) {
   let start = firstOfMonthUTC(new Date(startTs));
   if (start.getTime() < startTs) start = addMonthsUTC(start, 1);
@@ -101,7 +76,6 @@ function monthlyTicks(startTs, endTs, desired) {
   }
   return [...new Set(ticks)].slice(0, desired);
 }
-
 function yearlyTicks(startTs, endTs, desired) {
   const startYear = new Date(startTs).getUTCFullYear();
   let first = janFirstUTC(startYear);
@@ -139,7 +113,6 @@ function formatTick(rangeKey, d, prev, width, tz) {
     default:   return formatDate(d, { month: "short", day: "numeric" }, tz);
   }
 }
-
 function formatTooltip(d, rangeKey, tz) {
   const tzAbbr = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
     .formatToParts(d).find((p) => p.type === "timeZoneName")?.value;
@@ -148,13 +121,11 @@ function formatTooltip(d, rangeKey, tz) {
   }
   return `${formatDate(d, { weekday: "short" }, tz)}, ${formatDate(d, { month: "short" }, tz)} ${formatDate(d, { day: "numeric" }, tz)}, ${formatDate(d, { year: "numeric" }, tz)}`;
 }
-
 function generateTicks(rangeKey, series, width) {
   if (!series.length) return [];
   const desired = ticksForWidth(width);
   const startTs = series[0].ts;
   const endTs = series[series.length - 1].ts;
-
   switch (rangeKey) {
     case "1y":  return monthlyTicks(startTs, endTs, desired);
     case "5y":  return yearlyTicks(startTs, endTs, desired);
@@ -167,6 +138,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
   const { resolvedTheme } = useTheme();
   const reduceMotion = useReducedMotion();
 
+  // Hooks (stable order)
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -184,51 +156,95 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
     ticker ? `/chart/${ticker}?range=${config.range}&interval=${config.interval}` : null,
     fetcher, { dedupingInterval: refreshMs, refreshInterval: visible ? refreshMs : 0, keepPreviousData: true }
   );
-
   useEffect(() => { if (visible) mutate(); }, [visible, mutate]);
 
   const [lastUpdated, setLastUpdated] = useState(null);
   useEffect(() => { if (data) setLastUpdated(new Date()); }, [data]);
 
-  const [width, setWidth] = useState(0);
-  const [height, setHeight] = useState(0);
-  const isSmall = width < 640;
+  const [paneW, setPaneW] = useState(0);
+  const [paneH, setPaneH] = useState(0);
+  const isSmall = paneW < 640;
 
   const root = mounted ? getComputedStyle(document.documentElement) : null;
-  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
-  const tickColor = root?.getPropertyValue("--foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
+  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#bbb" : "#555");
+  const tickColor = root?.getPropertyValue("--foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#111");
   const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ddd");
   const tooltipBg = root?.getPropertyValue("--card")?.trim() || (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
 
   const series = useMemo(() => (data?.series || []).map((p) => ({ ...p, ts: new Date(p.date).getTime() })), [data]);
+
   const rk = config.rangeKey;
-  const ticks = useMemo(() => generateTicks(rk, series, width), [rk, series, width]);
+  const xTicks = useMemo(() => {
+    if (!series.length) return [];
+    const desired = ticksForWidth(paneW);
+    const startTs = series[0].ts;
+    const endTs = series[series.length - 1].ts;
+    switch (rk) {
+      case "1y":  return monthlyTicks(startTs, endTs, desired);
+      case "5y":  return yearlyTicks(startTs, endTs, desired);
+      case "3mo": return evenTicks(startTs, endTs, desired);
+      default:    return evenTicks(startTs, endTs, desired);
+    }
+  }, [rk, series, paneW]);
 
   const { prices, domain, yTicks, last, formatY } = useMemo(() => {
     const prices = series.map((p) => p.close);
     if (prices.length === 0) {
-      return { prices, domain: [0, 1], yTicks: [0, 0.25, 0.5, 0.75, 1], last: null, formatY: (v) => v };
+      const ticks = [0, 0.25, 0.5, 0.75, 1];
+      return { prices, domain: [ticks[0], ticks[ticks.length - 1]], yTicks: ticks, last: null, formatY: (v) => v };
     }
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     const pad = (max - min || 1) * 0.06;
     const lo = Math.max(0, min - pad);
     const hi = max + pad;
-    const count = ticksForHeight(height);
+    const count = ticksForHeight(paneH);
     const ticks = buildFixedTicks(lo, hi, count);
     const domain = [ticks[0], ticks[ticks.length - 1]];
     const step = ticks[1] - ticks[0];
     const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
     const formatter = (v) =>
       new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(v);
-    const last = series[series.length - 1];
+    const last = series[series.length - 1] || null;
     return { prices, domain, yTicks: ticks, last, formatY: formatter };
-  }, [series, height]);
+  }, [series, paneH]);
 
   const isLive = last ? Date.now() - last.ts < config.liveMs : false;
   const tz = data?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const fmtUpdated = lastUpdated ? formatDate(lastUpdated, { hour: "2-digit", minute: "2-digit", second: "2-digit" }, tz) : "--";
 
+  const MARGINS = useMemo(() => ({ top: 22, right: 32, bottom: isSmall ? 60 : 42, left: 36 }), [isSmall]);
+
+  // --- Sticky Y-axis (no backdrop, not clickable) ---
+  const wrapperRef = useRef(null);
+  const translateYAxis = useCallback(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const axisList = wrapper.querySelectorAll(".recharts-yAxis");
+    if (!axisList?.length) return;
+
+    const surface = wrapper.querySelector(".recharts-surface");
+    const scrollLeft = wrapper.scrollLeft;
+    const surfaceW = surface?.clientWidth || 0;
+    const wrapperW = wrapper.clientWidth;
+
+    axisList.forEach((axisG) => {
+      const tickLine = axisG.querySelector(".recharts-cartesian-axis-tick-line");
+      const orientation = tickLine?.getAttribute("orientation") || "left";
+      const pos = orientation === "left"
+        ? scrollLeft
+        : scrollLeft - surfaceW + wrapperW;
+
+      axisG.style.transform = `translateX(${pos}px)`;
+      axisG.style.willChange = "transform";
+      axisG.style.pointerEvents = "none"; // <-- not clickable/hoverable
+      // also prevent text selection cursor
+      axisG.style.userSelect = "none";
+    });
+  }, []);
+  useEffect(() => { translateYAxis(); }, [translateYAxis, paneW, paneH, domain, yTicks, option, resolvedTheme]);
+
+  // Renders
   if (!mounted) return <div className="h-[320px] w-full rounded-2xl border border-border bg-card animate-pulse" />;
   if (isLoading) return <div className="h-[320px] w-full rounded-2xl border border-border bg-muted animate-pulse" aria-busy="true" />;
   if (error) {
@@ -245,7 +261,6 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
 
   return (
     <div className="w-full text-foreground bg-card border border-border rounded-2xl p-4 sm:p-6" aria-live="polite">
-      {/* Tabs (full-width on mobile) */}
       <div className="-mx-2 sm:mx-0 px-2 sm:px-0 mb-2">
         <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap">
           {OPTIONS.map((opt) => (
@@ -266,8 +281,8 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
         </div>
       </div>
 
-      {/* Horizontal scroll region on phones */}
       <div
+        ref={wrapperRef}
         className="sm:overflow-visible overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none]"
         style={{ WebkitOverflowScrolling: "touch" }}
         onWheel={(e) => {
@@ -276,55 +291,77 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
             e.preventDefault();
           }
         }}
+        onScroll={translateYAxis}
       >
-        {/* Rail keeps consistent padding so the chart never touches edges */}
-        <div className="pl-2 pr-2 sm:px-0">
-          {/* Wider than viewport on phones so users can pan */}
-          <div className="min-w-[720px] sm:min-w-0">
-            <div className="min-h-[280px] h-[40vh] max-h-[520px]">
-              <ResponsiveContainer width="100%" height="100%" onResize={(w, h) => { setWidth(w); setHeight(h); }}>
-                <AreaChart data={series} margin={{ top: 22, right: 32, bottom: isSmall ? 60 : 42, left: 36 }}>
-                  <defs>
-                    <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.06} />
-                    </linearGradient>
-                  </defs>
+        <div className="min-w-[720px] sm:min-w-0">
+          <div className="min-h-[280px] h-[40vh] max-h=[520px]">
+            <ResponsiveContainer width="100%" height="100%" onResize={(w, h) => { setPaneW(w); setPaneH(h); }}>
+              <AreaChart data={series} margin={MARGINS}>
+                <defs>
+                  <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.06} />
+                  </linearGradient>
+                </defs>
 
-                  <CartesianGrid stroke={gridColor} strokeOpacity={0.12} vertical={false} />
-                  <XAxis
-                    dataKey="ts"
-                    ticks={ticks}
-                    tickFormatter={(v, i) => formatTick(rk, new Date(v), i > 0 ? new Date(ticks[i - 1]) : null, width, tz)}
-                    tick={{ fill: tickColor, fontSize: isSmall ? 10 : 12 }}
-                    axisLine={{ stroke: axisColor, opacity: 0.35 }}
-                    tickLine={{ stroke: axisColor, opacity: 0.35 }}
-                    minTickGap={24}
-                    tickMargin={8}
-                    height={isSmall ? 64 : 44}
-                    angle={isSmall ? -35 : 0}
-                    textAnchor={isSmall ? "end" : "middle"}
-                    type="number"
-                    domain={["dataMin", "dataMax"]}
+                <CartesianGrid stroke={gridColor} strokeOpacity={0.12} vertical={false} />
+
+                <XAxis
+                  dataKey="ts"
+                  ticks={xTicks}
+                  tickFormatter={(v, i) =>
+                    formatTick(rk, new Date(v), i > 0 ? new Date(xTicks[i - 1]) : null, paneW, tz)
+                  }
+                  tick={{ fill: tickColor, fontSize: isSmall ? 10 : 12 }}
+                  axisLine={{ stroke: axisColor, opacity: 0.35 }}
+                  tickLine={{ stroke: axisColor, opacity: 0.35 }}
+                  minTickGap={24}
+                  tickMargin={8}
+                  height={isSmall ? 64 : 44}
+                  angle={isSmall ? -35 : 0}
+                  textAnchor={isSmall ? "end" : "middle"}
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
+                />
+
+                <YAxis
+                  domain={domain}
+                  ticks={yTicks}
+                  tickFormatter={formatY}
+                  tick={{ fill: tickColor, fontSize: isSmall ? 10 : 12 }}
+                  axisLine={{ stroke: axisColor, opacity: 0.35 }}
+                  tickLine={{ stroke: axisColor, opacity: 0.35 }}
+                />
+
+                <Tooltip
+                  contentStyle={{ backgroundColor: tooltipBg, border: "1px solid hsl(var(--border))", borderRadius: 6, color: "hsl(var(--foreground))", padding: "0.5rem" }}
+                  labelFormatter={(v) => formatTooltip(new Date(v), rk, tz)}
+                  formatter={(value) => [formatY(value), "Close"]}
+                />
+
+                <Area
+                  type="monotone"
+                  dataKey="close"
+                  stroke="#60a5fa"
+                  strokeWidth={2}
+                  fill="url(#priceFill)"
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  isAnimationActive={!reduceMotion}
+                />
+
+                {last && (
+                  <ReferenceDot
+                    x={last.ts}
+                    y={last.close}
+                    r={4}
+                    fill="#60a5fa"
+                    stroke="hsl(var(--background))"
+                    strokeWidth={1}
                   />
-                  <YAxis
-                    domain={domain}
-                    ticks={yTicks}
-                    tickFormatter={formatY}
-                    tick={{ fill: tickColor, fontSize: isSmall ? 10 : 12 }}
-                    axisLine={{ stroke: axisColor, opacity: 0.35 }}
-                    tickLine={{ stroke: axisColor, opacity: 0.35 }}
-                  />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: tooltipBg, border: "1px solid hsl(var(--border))", borderRadius: 6, color: "hsl(var(--foreground))", padding: "0.5rem" }}
-                    labelFormatter={(v) => formatTooltip(new Date(v), rk, tz)}
-                    formatter={(value) => [formatY(value), "Close"]}
-                  />
-                  <Area type="monotone" dataKey="close" stroke="#60a5fa" strokeWidth={2} fill="url(#priceFill)" dot={false} activeDot={{ r: 4 }} isAnimationActive={!reduceMotion} />
-                  {last && <ReferenceDot x={last.ts} y={last.close} r={4} fill="#60a5fa" stroke="hsl(var(--background))" strokeWidth={1} />}
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+                )}
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>

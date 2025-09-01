@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { useReducedMotion } from "framer-motion";
 import {
@@ -23,7 +23,7 @@ function niceTicks(min, max, count = 5) {
 }
 
 export default function PredictionChart({ data }) {
-  // 1) All hooks first, always
+  // hooks (fixed order)
   const { resolvedTheme } = useTheme();
   const reduceMotion = useReducedMotion();
 
@@ -58,12 +58,11 @@ export default function PredictionChart({ data }) {
     return Array.from({ length: n }, (_, i) => Math.round(a + i * step));
   }, [series]);
 
-  // These hooks/derivations must also run every render (guard internally if needed)
   const root = useMemo(
     () => (typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null),
     []
   );
-  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
+  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#bbb" : "#555");
   const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ccc");
   const tooltipBg = root?.getPropertyValue("--card")?.trim() || (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
   const dtf = useMemo(() => new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" }), []);
@@ -73,15 +72,46 @@ export default function PredictionChart({ data }) {
   const fontSize  = isSmall ? 10 : 12;
   const fmtCurrency = (v) => (Number.isFinite(v) ? `$${v.toFixed(2)}` : "N/A");
 
-  // 2) Then render (can branch now — hook order is fixed above)
+  // --- Sticky Y-axis (no backdrop, not clickable) ---
+  const wrapperRef = useRef(null);
+  const translateYAxis = useCallback(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const axisList = wrapper.querySelectorAll(".recharts-yAxis");
+    if (!axisList?.length) return;
+
+    const surface = wrapper.querySelector(".recharts-surface");
+    const scrollLeft = wrapper.scrollLeft;
+    const surfaceW = surface?.clientWidth || 0;
+    const wrapperW = wrapper.clientWidth;
+
+    axisList.forEach((axisG) => {
+      const tickLine = axisG.querySelector(".recharts-cartesian-axis-tick-line");
+      const orientation = tickLine?.getAttribute("orientation") || "left";
+      const pos = orientation === "left"
+        ? scrollLeft
+        : scrollLeft - surfaceW + wrapperW;
+
+      axisG.style.transform = `translateX(${pos}px)`;
+      axisG.style.willChange = "transform";
+      axisG.style.pointerEvents = "none"; // not clickable/hoverable
+      axisG.style.userSelect = "none";
+    });
+  }, []);
+  useEffect(() => { translateYAxis(); }, [translateYAxis, width, height, yMin, yMax, resolvedTheme]);
+
   if (!mounted) {
     return <div className="h-[320px] w-full rounded-2xl bg-card animate-pulse" />;
   }
 
   return (
     <div className="w-full bg-card rounded-2xl p-4 sm:p-6">
-      <div className="sm:overflow-visible overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none]"
-           style={{ WebkitOverflowScrolling: "touch" }}>
+      <div
+        ref={wrapperRef}
+        className="sm:overflow-visible overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none]"
+        style={{ WebkitOverflowScrolling: "touch" }}
+        onScroll={translateYAxis}
+      >
         <div className="min-w-[720px] sm:min-w-0">
           <div className="min-h-[280px] h-[60vh] max-h-[520px]">
             <ResponsiveContainer width="100%" height="100%" onResize={(w,h)=>{setWidth(w);setHeight(h);}}>
