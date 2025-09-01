@@ -8,7 +8,7 @@ import { OverviewSection } from "@/components/stock/overview-section";
 import dynamic from "next/dynamic";
 const PriceChart = dynamic(() => import("@/components/stock/PriceChart"), { ssr: false });
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import FilingsPanel from "@/components/filings/FilingsPanel";
 
@@ -94,16 +94,7 @@ export default function TickerPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-heading pb--20">Price Chart</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-73">
-                      <PriceChart ticker={ticker} />
-                    </div>
-                  </CardContent>
-                </Card>
+                <PriceChart ticker={ticker} />
               </div>
             )}
 

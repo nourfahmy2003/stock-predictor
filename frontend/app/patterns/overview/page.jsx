@@ -54,9 +54,7 @@ export default function PatternsOverviewPage() {
         </select>
       </div>
       {selected && (
-        <div className="border rounded p-2">
-          <PriceChart ticker={selected} />
-        </div>
+        <PriceChart ticker={selected} />
       )}
       {loading ? (
         <p className="text-muted-foreground">Loading...</p>
