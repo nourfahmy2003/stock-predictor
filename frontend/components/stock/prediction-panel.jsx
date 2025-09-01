@@ -81,7 +81,10 @@ function PredictionPanel({ ticker }) {
     <div className="space-y-5 relative min-h-[520px]">
       {loading && (
         <div className="absolute inset-x-0 top-24 bottom-0 z-10 grid place-items-center">
-          <Loader size={320} />
+          <Loader
+            size={320}
+            className="text-black dark:text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.06)] shadow-[0_0_0_1px_rgba(0,0,0,0.02)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.04)]"
+          />
         </div>
       )}
 

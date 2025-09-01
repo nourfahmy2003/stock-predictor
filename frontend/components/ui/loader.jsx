@@ -2,10 +2,10 @@
 import React from "react";
 import styled from "styled-components";
 
-const Loader = ({ size = 260 }) => {
+const Loader = ({ size = 260, className = "" }) => {
   return (
     <StyledWrapper style={{ "--loader-size": `${size}px` }}>
-      <div className="loader-wrapper">
+      <div className={`loader-wrapper ${className}`}>
         <span className="loader-letter">G</span>
         <span className="loader-letter">e</span>
         <span className="loader-letter">n</span>
@@ -51,7 +51,7 @@ const StyledWrapper = styled.div`
     height:var(--loader-size,180px);
     font-family:"Inter",sans-serif;
     font-size:clamp(12px, calc(var(--loader-size) * 0.08), 28px);
-    color:white;
+    color:inherit;
     border-radius:50%;
     user-select:none;
   }

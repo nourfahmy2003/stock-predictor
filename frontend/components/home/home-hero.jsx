@@ -16,7 +16,7 @@ const GalaxyInteractiveHeroBackground = dynamic(
 export default function HomeHero() {
   const router = useRouter()
   return (
-    <section className="relative min-h-screen flex items-center justify-center px-4 overflow-hidden">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* BACKGROUND: full-bleed, behind content */}
       <div className="absolute inset-0">
         <GalaxyInteractiveHeroBackground
@@ -28,24 +28,23 @@ export default function HomeHero() {
       </div>
 
       {/* FOREGROUND CONTENT */}
-      <div className="relative z-10 text-center max-w-4xl mx-auto">
+      <div className="relative z-10 text-center mx-auto max-w-3xl px-4 sm:px-6">
         <motion.div
-          className="space-y-2 mb-6"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
-          <h1 className="text-5xl md:text-7xl font-bold font-heading leading-tight">
-            <span className="text-foreground">AI-Powered</span>
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-heading font-extrabold tracking-tight leading-[0.95] text-neutral-900 drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)] dark:text-white dark:drop-shadow-none">
+            <span>AI-Powered</span>
             <br />
-            <span className="bg-gradient-to-r from-primary via-blue-500 to-cyan-400 bg-clip-text text-transparent">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 via-blue-400 to-cyan-400 dark:from-blue-400 dark:via-indigo-400 dark:to-cyan-300">
               Stock Analysis
             </span>
           </h1>
         </motion.div>
 
         <motion.p
-          className="text-xl md:text-2xl text-muted-foreground/90 mb-12 max-w-2xl mx-auto leading-relaxed font-body"
+          className="mt-6 max-w-2xl mx-auto text-base sm:text-lg md:text-xl text-neutral-600 dark:text-neutral-300"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
@@ -55,12 +54,12 @@ export default function HomeHero() {
         </motion.p>
 
         <motion.div
-          className="max-w-lg mx-auto"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
         >
           <SymbolSearch
+            className="mt-8 w-full sm:max-w-xl mx-auto"
             onSelect={async (it) => {
               try {
                 const v = await api(`/symbols/validate?symbol=${encodeURIComponent(it.symbol)}`);
@@ -77,7 +76,7 @@ export default function HomeHero() {
         </motion.div>
 
         <motion.p
-          className="text-sm text-muted-foreground/70 mt-6"
+          className="mt-6 text-sm text-neutral-600 dark:text-neutral-300"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.6 }}

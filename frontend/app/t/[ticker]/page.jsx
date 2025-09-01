@@ -11,6 +11,7 @@ import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import FilingsPanel from "@/components/filings/FilingsPanel";
+import { LoadingText } from "@/components/LoadingText";
 
 const PredictionPanel = dynamic(() => import("@/components/stock/prediction-panel"), { ssr: false });
 
@@ -103,9 +104,9 @@ export default function TickerPage() {
             {activeTab === 'predictions' && (
               <Suspense
                 fallback={
-                  <div className="text-sm opacity-70">
+                  <LoadingText>
                     Running prediction… this can take a few minutes.
-                  </div>
+                  </LoadingText>
                 }
               >
                 <PredictionPanel ticker={ticker} />

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 
-export default function SymbolSearch({ defaultQuery = "", onSelect }) {
+export default function SymbolSearch({ defaultQuery = "", onSelect, className = "" }) {
   const [q, setQ] = useState(defaultQuery);
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
@@ -53,15 +53,23 @@ export default function SymbolSearch({ defaultQuery = "", onSelect }) {
   };
 
   return (
-    <div className="relative w-full">
-      <input
-        value={q}
-        onChange={e => setQ(e.target.value)}
-        onFocus={() => q && setOpen(true)}
-        onKeyDown={onKey}
-        placeholder="Search Yahoo symbols (e.g., AAPL, BTC-USD, VOD.L)"
-        className="w-full px-3 py-2 rounded-xl border bg-background"
-      />
+    <div className={`relative w-full ${className}`}>
+      <div className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white/90 shadow-sm ring-1 ring-black/[0.02] backdrop-blur px-4 py-3 hover:border-neutral-300 dark:border-neutral-800 dark:bg-neutral-900/80 dark:ring-white/[0.04] dark:hover:border-neutral-700">
+        <svg aria-hidden="true" className="h-5 w-5 shrink-0 text-neutral-400 dark:text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="search"
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          onFocus={() => q && setOpen(true)}
+          onKeyDown={onKey}
+          placeholder="Search Yahoo symbols (e.g., AAPL, BTC-USD, VOD.L)"
+          aria-label="Search symbols"
+          className="w-full bg-transparent text-base text-neutral-900 placeholder:text-neutral-400 outline-none dark:text-neutral-100 dark:placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-0 rounded-xl"
+        />
+      </div>
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-xl border bg-popover shadow-lg max-h-80 overflow-auto">
           {items.length === 0 ? (
