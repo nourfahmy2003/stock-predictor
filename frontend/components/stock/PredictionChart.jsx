@@ -39,17 +39,6 @@ export default function PredictionChart({ data }) {
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) {
-    return <div className="h-[320px] w-full rounded-md border border-border animate-pulse" />;
-  }
-
-  const root = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
-  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
-  const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ccc");
-  const tooltipBg =
-    root?.getPropertyValue("--card")?.trim() ||
-    (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
-
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
   const isSmall = width < 640;
@@ -101,6 +90,25 @@ export default function PredictionChart({ data }) {
 
   const fmtCurrency = (v) => (Number.isFinite(v) ? `$${v.toFixed(2)}` : "N/A");
 
+  const forecastStartTs = useMemo(() => {
+    const f = series.find((d) => d.part === "forecast");
+    return f && f.ts;
+  }, [series]);
+
+  const lineWidth = isSmall ? 2.5 : 3;
+  const fontSize = isSmall ? 10 : 12;
+
+  if (!mounted) {
+    return <div className="h-[320px] w-full rounded-md border border-border animate-pulse" />;
+  }
+
+  const root = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
+  const axisColor = root?.getPropertyValue("--muted-foreground")?.trim() || (resolvedTheme === "dark" ? "#fff" : "#000");
+  const gridColor = root?.getPropertyValue("--border")?.trim() || (resolvedTheme === "dark" ? "#333" : "#ccc");
+  const tooltipBg =
+    root?.getPropertyValue("--card")?.trim() ||
+    (resolvedTheme === "dark" ? "rgba(0,0,0,0.9)" : "rgba(255,255,255,0.98)");
+
   const renderTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const row = payload[0].payload;
@@ -120,14 +128,6 @@ export default function PredictionChart({ data }) {
     }
     return null;
   };
-
-  const forecastStartTs = useMemo(() => {
-    const f = series.find((d) => d.part === "forecast");
-    return f && f.ts;
-  }, [series]);
-
-  const lineWidth = isSmall ? 2.5 : 3;
-  const fontSize = isSmall ? 10 : 12;
 
   return (
     <ResponsiveContainer width="100%" height="100%" onResize={(w, h) => { setWidth(w); setHeight(h); }}>

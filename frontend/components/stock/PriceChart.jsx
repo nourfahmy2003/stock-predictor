@@ -452,7 +452,7 @@ export default function PriceChart({ ticker, refreshMs = 30_000 }) {
           }}
         >
           <div className="min-w-[720px] sm:min-w-0 pr-2">
-            <div style={{ height: "60vh", maxHeight: 520, minHeight: 320 }}>
+            <div className="h-[30vh] max-h-[400px] min-h-[280px]">
               <ResponsiveContainer
                 width="100%"
                 height="100%"
