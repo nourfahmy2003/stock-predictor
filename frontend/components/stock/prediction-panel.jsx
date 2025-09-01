@@ -1,29 +1,32 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { BarChart3 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { MetricBox } from "@/components/stock/metric-box";
 import { ChartWrapper } from "@/components/stock/chart-wrapper";
-import DayRange from "@/components/stock/DayRange";
-import PredictionChart from "./PredictionChart";
-import { StatCard } from "@/components/stock/stat-card";
-import { usePrediction } from "./use-prediction-hook";
 import Loader from "@/components/ui/loader";
-import { api } from "@/lib/api";
+import { usePrediction } from "./use-prediction-hook";
+import dynamic from "next/dynamic";
+
+const PredictionChart = dynamic(() => import("./PredictionChart"), { ssr: false });
 
 function PredictionPanel({ ticker }) {
+  // model params
   const lookBack = 60;
   const context = 100;
   const backtestHorizon = 20;
   const horizon = 10;
 
-  const { state, result, err } = usePrediction(ticker, { lookBack, context, backtestHorizon, horizon });
-  const loading = state === "loading";
-  const [detecting, setDetecting] = useState(false);
-  const [patternResult, setPatternResult] = useState(null);
+  const { state, result, err } = usePrediction(ticker, {
+    lookBack,
+    context,
+    backtestHorizon,
+    horizon,
+  });
 
-  const metrics = result?.metrics || {};
+  const loading = state === "loading";
+
+  // ---- Build series + per-row accuracy
   const series = useMemo(() => {
     const raw = result?.forecast || [];
     return raw
@@ -39,45 +42,43 @@ function PredictionPanel({ ticker }) {
       });
   }, [result]);
 
+  // ---- KPIs from backtest window
   const backtestRows = useMemo(
     () => series.filter((r) => r.part === "backtest" && r.accuracy !== null),
     [series]
   );
+
   const avgAbsErr =
     backtestRows.length > 0
-      ? backtestRows.reduce((s, r) => s + Math.abs(r.pred - r.actual), 0) /
-      backtestRows.length
+      ? backtestRows.reduce((s, r) => s + Math.abs(r.pred - r.actual), 0) / backtestRows.length
       : 0;
+
   const meanPctErr =
     backtestRows.length > 0
-      ?
-      backtestRows.reduce(
-        (s, r) =>
-          s +
-          Math.abs(
-            (r.pred - r.actual) / (r.actual === 0 ? 1 : r.actual)
-          ) * 100,
-        0
-      ) /
-      backtestRows.length
+      ? backtestRows.reduce(
+          (s, r) => s + Math.abs((r.pred - r.actual) / (r.actual === 0 ? 1 : r.actual)) * 100,
+          0
+        ) / backtestRows.length
       : 0;
-  const avgAccuracy = backtestRows.length > 0 ? 100 - meanPctErr : 0;
-  const directionalAcc = metrics.accuracy_pct || 0;
 
-  async function handleDetect() {
-    try {
-      setDetecting(true);
-      const data = await api(`/patterns/detect?symbol=${encodeURIComponent(ticker)}&interval=1d`);
-      setPatternResult(data);
-    } catch (e) {
-      console.error("pattern detection failed", e);
-    } finally {
-      setDetecting(false);
-    }
-  }
+  const avgAccuracy = backtestRows.length > 0 ? 100 - meanPctErr : 0;
+  const directionalAcc = result?.metrics?.accuracy_pct ?? null; // if you still want it somewhere later
+
+  // ---- Subtitle: date range + forecast start
+  const subtitle = useMemo(() => {
+    if (!series.length) return "Showing last 20 days + next 10 days";
+    const dtf = new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit" });
+    const start = dtf.format(new Date(series[0].date));
+    const end = dtf.format(new Date(series[series.length - 1].date));
+    const forecastStart = series.find((d) => d.part === "forecast")?.date;
+    const cut = forecastStart ? dtf.format(new Date(forecastStart)) : null;
+    return cut
+      ? `${start} – ${end} • forecast starts ${cut}`
+      : `${start} – ${end}`;
+  }, [series]);
 
   return (
-    <div className="space-y-6 relative min-h-[520px]">
+    <div className="space-y-5 relative min-h-[520px]">
       {loading && (
         <div className="absolute inset-x-0 top-24 bottom-0 z-10 grid place-items-center">
           <Loader size={320} />
@@ -96,9 +97,9 @@ function PredictionPanel({ ticker }) {
       )}
 
       {result && (
-        <div className="space-y-6" aria-live="polite">
-          {/* Friendly KPIs for general users */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+        <div className="space-y-5" aria-live="polite">
+          {/* Compact KPI strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <MetricBox
               label="Avg 20-day Accuracy"
               value={avgAccuracy.toFixed(1)}
@@ -116,35 +117,11 @@ function PredictionPanel({ ticker }) {
             />
           </div>
 
+          {/* Chart only — no duplicated stat cards below */}
           <Card className="p-4">
-            <div className="flex justify-end mb-2">
-              <Button size="sm" variant="outline" onClick={handleDetect} disabled={detecting}>
-                {detecting ? "Detecting…" : "Detect patterns"}
-              </Button>
-            </div>
-            <ChartWrapper
-              title="Price: Actual vs 10-Day Prediction"
-              subtitle="Showing last 20 days + next 10 days"
-            >
+            <ChartWrapper title="Price: Actual vs 10-Day Prediction" subtitle={subtitle}>
               <PredictionChart data={series} />
             </ChartWrapper>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              <StatCard
-                title="Typical prediction error"
-                value={`$${avgAbsErr.toFixed(2)}`}
-                description="over last 20 days"
-              />
-              <StatCard
-                title="Directional accuracy"
-                value={`${directionalAcc.toFixed(1)}%`}
-                description="over last 20 days"
-              />
-            </div>
-            {patternResult && (
-              <pre className="mt-4 text-xs bg-muted p-2 rounded overflow-x-auto">
-                {JSON.stringify(patternResult, null, 2)}
-              </pre>
-            )}
           </Card>
         </div>
       )}
