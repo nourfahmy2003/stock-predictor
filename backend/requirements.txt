@@ -115,7 +115,7 @@ typing-inspection==0.4.1
 typing_extensions==4.14.1
 tzdata==2025.2
 urllib3==2.5.0
-uvicorn==0.35.0
+uvicorn[standard]==0.35.0
 uvloop==0.21.0
 watchfiles==1.1.0
 wcwidth==0.2.13
@@ -126,9 +126,11 @@ wrapt==1.17.3
 yfinance==0.2.65
 ultralytics==8.3.16
 opencv-python-headless==4.10.0.84
-fastapi
-uvicorn[standard]
-transformers==4.43.4
-tokenizers>=0.15
+## Duplicates removed: fastapi and uvicorn already pinned above
+## Transformers stack is optional and currently fails to build
+## tokenizers on Python 3.13 (PyO3 < 3.13). We skip on 3.13+
+## and the app degrades gracefully (news sentiment disabled).
+transformers>=4.46.3 ; python_version < "3.13"
+tokenizers==0.20.1 ; python_version < "3.13"
 # Torch CPU build (works on Render Linux)
 torch==2.3.1+cpu ; platform_system != "Darwin"

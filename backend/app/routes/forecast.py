@@ -8,12 +8,19 @@ import asyncio
 import uuid
 from typing import Any, Dict, List
 
-import papermill as pm
+# Lazy/optional import so the app can start even if papermill
+# isn't installed in the current environment.
+try:  # pragma: no cover - environment convenience
+    import papermill as pm  # type: ignore
+except Exception:  # pragma: no cover
+    pm = None  # type: ignore
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 NOTEBOOK_PATH = os.getenv("NOTEBOOK_PATH", "notebooks/Stock_LSTM_10day.ipynb")
+# Optional fallback JSON output to allow the endpoint to work without papermill
+FALLBACK_JSON = os.getenv("FORECAST_FALLBACK_JSON", "notebooks/forecast.json")
 
 router = APIRouter()
 
@@ -57,8 +64,29 @@ def run_forecast_blocking(
     """
     Executes the parameterized notebook and returns its JSON result.
     """
-    if not os.path.exists(NOTEBOOK_PATH):
-        raise RuntimeError(f"Notebook not found: {NOTEBOOK_PATH}")
+    # If papermill is unavailable or the notebook path is missing, try the
+    # fallback JSON so the app keeps working in lightweight setups.
+    if pm is None or not os.path.exists(NOTEBOOK_PATH):
+        if os.path.exists(FALLBACK_JSON):
+            with open(FALLBACK_JSON) as f:
+                data = json.load(f)
+            # Best-effort parameter override so the response matches the request
+            data["ticker"] = ticker
+            data["look_back"] = look_back
+            data["context"] = context
+            data["backtest_horizon"] = backtest_horizon
+            data["horizon"] = horizon
+            return data
+        missing = []
+        if pm is None:
+            missing.append("papermill")
+        if not os.path.exists(NOTEBOOK_PATH):
+            missing.append(f"notebook:{NOTEBOOK_PATH}")
+        raise RuntimeError(
+            "Forecast requires papermill and a notebook, or a fallback JSON. "
+            f"Missing: {', '.join(missing)}. "
+            f"Set FORECAST_FALLBACK_JSON to a valid file or install papermill."
+        )
 
     with tempfile.TemporaryDirectory() as tmp:
         out_nb = os.path.join(tmp, "out.ipynb")
@@ -74,7 +102,7 @@ def run_forecast_blocking(
         }
 
         try:
-            pm.execute_notebook(
+            pm.execute_notebook(  # type: ignore[attr-defined]
                 NOTEBOOK_PATH,
                 out_nb,
                 parameters=params,

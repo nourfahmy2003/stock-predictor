@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from app.schemas import BacktestRunIn, BacktestStatus, BacktestResult
-from app.services.backtest import simulate_backtest, run_backtest, run_backtest_last
 
 router = APIRouter()
 
@@ -17,7 +16,11 @@ async def _run_job(job_id: str, payload: BacktestRunIn):
 
         def cb(p):
             jobs[job_id] = {"state": "running", "pct": int(p)}
-
+        try:
+            from app.services.backtest import simulate_backtest
+        except Exception as e:
+            jobs[job_id] = {"state": "error", "pct": 100, "message": f"Backtest unavailable: {e}"}
+            return
         result = await asyncio.to_thread(simulate_backtest, payload, cb)
         jobs[job_id] = {"state": "done", "pct": 100, "result": result}
     except Exception as e:
@@ -56,9 +59,11 @@ async def lstm_backtest(
     end: str | None = None,
 ):
     try:
-        result = await asyncio.to_thread(
-            run_backtest, ticker, look_back, horizon, start, end
-        )
+        try:
+            from app.services.backtest import run_backtest
+        except Exception as e:
+            raise HTTPException(503, f"Backtest unavailable: {e}")
+        result = await asyncio.to_thread(run_backtest, ticker, look_back, horizon, start, end)
     except Exception as e:
         raise HTTPException(400, str(e))
     return result
@@ -71,8 +76,11 @@ async def accuracy_backtest(
     horizon: int = Query(10, ge=1, le=30),
 ):
     try:
+        try:
+            from app.services.backtest import run_backtest_last
+        except Exception as e:
+            raise HTTPException(503, f"Backtest unavailable: {e}")
         result = await asyncio.to_thread(run_backtest_last, ticker, look_back, horizon)
     except Exception as e:
         raise HTTPException(400, str(e))
     return result
-

@@ -7,7 +7,6 @@ import yfinance as yf
 from fastapi import APIRouter, HTTPException, Query
 
 from app.services.extract import bs4_extract_text
-from app.services.sentiment import classify_texts, _CLASSIFY_SEM, MODEL_ID
 from app.utils.text import _clean_title, _preview, _summarize_first_n_sentences
 
 router = APIRouter()
@@ -45,6 +44,23 @@ async def news(
       - full: use minimal extractor, analyze full text (truncated to max_chars)
     """
     try:
+        # Try loading sentiment stack only if analysis requested
+        MODEL_ID = None
+        classify_texts = None
+        _CLASSIFY_SEM = None
+        if analyze:
+            try:
+                from app.services.sentiment import (
+                    classify_texts as _classify_texts,
+                    _CLASSIFY_SEM as _sem,
+                    MODEL_ID as _model_id,
+                )
+                classify_texts = _classify_texts
+                _CLASSIFY_SEM = _sem
+                MODEL_ID = _model_id
+            except Exception as e:
+                # Degrade gracefully: proceed without analysis if stack missing
+                analyze = False
         days = RANGE_TO_DAYS.get(range, 7)
 
         name = None
@@ -175,7 +191,7 @@ async def news(
             for it, s, extra, meta in zip(paginated, sentiments, extracted_payloads, analysis_meta):
                 row = {
                     **it,
-                    "engine": MODEL_ID.split("/")[-1],
+                    "engine": MODEL_ID.split("/")[-1] if MODEL_ID else None,
                     "sentiment": s["sentiment"],
                     "stars": s["stars"],
                     "confidence": s["confidence"],
