@@ -28,12 +28,27 @@ function formatAsOf(asOf) {
   if (!asOf) return "";
   const dt = new Date(asOf);
   if (Number.isNaN(dt.getTime())) return String(asOf);
-  return new Intl.DateTimeFormat(undefined, {
+
+  const localOptions = {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(dt);
+    timeZoneName: "short",
+  };
+  const localFormatter = new Intl.DateTimeFormat(undefined, localOptions);
+  const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local";
+  const localStr = localFormatter.format(dt);
+
+  const nyFormatter = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+    timeZoneName: "short",
+  });
+  const nyStr = nyFormatter.format(dt);
+
+  return `${localStr} (${localTz}) • NYSE ${nyStr}`;
 }
 
 function directionVariant(direction) {

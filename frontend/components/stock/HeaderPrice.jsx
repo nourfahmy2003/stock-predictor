@@ -24,28 +24,28 @@ function formatCurrency(value, currency = "USD") {
 
 const SESSION_TONES = {
   "PRE-MARKET": "border-sky-400/40 bg-sky-500/15 text-sky-100",
-  OPEN: "border-emerald-500/40 bg-emerald-500/20 text-emerald-100",
+  "OPEN MARKET": "border-emerald-500/40 bg-emerald-500/20 text-emerald-100",
   "POST-MARKET": "border-indigo-400/40 bg-indigo-500/20 text-indigo-100",
-  CLOSED: "border-white/10 bg-white/5 text-white/70",
+  "CLOSED MARKET": "border-white/10 bg-white/5 text-white/70",
 }
 
 const SESSION_MAP = {
   PREMARKET: "PRE-MARKET",
   "PRE-MARKET": "PRE-MARKET",
   PRE: "PRE-MARKET",
-  OPEN: "OPEN",
-  REGULAR: "OPEN",
-  CONTINUOUS: "OPEN",
+  OPEN: "OPEN MARKET",
+  REGULAR: "OPEN MARKET",
+  CONTINUOUS: "OPEN MARKET",
   POSTMARKET: "POST-MARKET",
   "POST-MARKET": "POST-MARKET",
   POST: "POST-MARKET",
-  CLOSED: "CLOSED",
+  CLOSED: "CLOSED MARKET",
 }
 
 function normalizeSession(session) {
-  if (!session) return "CLOSED"
+  if (!session) return "CLOSED MARKET"
   const key = String(session).toUpperCase()
-  return SESSION_MAP[key] || "CLOSED"
+  return SESSION_MAP[key] || "CLOSED MARKET"
 }
 
 function formatEventTime(isoString) {
@@ -82,7 +82,10 @@ export default function HeaderPrice({ ticker }) {
   } = data || {}
 
   const pct = changePercent != null ? (changePercent * 100).toFixed(2) : null
-  const abs = change != null ? change.toFixed(2) : null
+  const changeAmount = Number(change)
+  const changeCurrency = Number.isFinite(changeAmount)
+    ? `${changeAmount >= 0 ? "+" : "-"}${formatCurrency(Math.abs(changeAmount), currency)}`
+    : null
   const positive = changePercent > 0
   const negative = changePercent < 0
   const tone = positive ? "text-emerald-400" : negative ? "text-rose-400" : "text-zinc-500 dark:text-zinc-400"
@@ -92,20 +95,20 @@ export default function HeaderPrice({ ticker }) {
   const regularFormatted = Number.isFinite(Number(regularMarketPrice))
     ? formatCurrency(regularMarketPrice, currency)
     : null
-  const showRegularNote = sessionLabel === "CLOSED" && regularFormatted
+  const showRegularNote = sessionLabel === "CLOSED MARKET" && regularFormatted
 
-  const badgeTone = SESSION_TONES[sessionLabel] || SESSION_TONES.CLOSED
+  const badgeTone = SESSION_TONES[sessionLabel] || SESSION_TONES["CLOSED MARKET"]
 
   const nextEventFormatted = formatEventTime(nextSessionChange)
   const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local"
   let tooltipContent = null
   if (nextEventFormatted) {
-    if (sessionLabel === "CLOSED") {
+    if (sessionLabel === "CLOSED MARKET") {
       tooltipContent = `Reopens ${nextEventFormatted} (your time) • Local TZ: ${userTz}`
     } else if (sessionLabel === "PRE-MARKET") {
       tooltipContent = `Regular session opens ${nextEventFormatted} (your time).`
-    } else if (sessionLabel === "OPEN") {
-      tooltipContent = `Closes ${nextEventFormatted} (your time).`
+    } else if (sessionLabel === "OPEN MARKET") {
+      tooltipContent = `Market closes ${nextEventFormatted} (your time).`
     } else if (sessionLabel === "POST-MARKET") {
       tooltipContent = `Extended closes ${nextEventFormatted} (your time).`
     }
@@ -122,7 +125,7 @@ export default function HeaderPrice({ ticker }) {
           <span className={cn("inline-flex items-center gap-1 text-base font-medium", tone)}>
             {positive ? <ArrowUpRight className="h-4 w-4" /> : negative ? <ArrowDownRight className="h-4 w-4" /> : null}
             <span>{pct}%</span>
-            {abs ? <span>({abs})</span> : null}
+            {changeCurrency ? <span>({changeCurrency})</span> : null}
           </span>
         ) : (
           <span className="text-base font-medium text-zinc-500 dark:text-zinc-400">—</span>

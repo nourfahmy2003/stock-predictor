@@ -11,6 +11,7 @@ from app.routes import (
     backtest,
     symbols,
     patterns,
+    analysis,
 )
 
 app = make_app()
@@ -24,6 +25,7 @@ app.include_router(filings.router)
 app.include_router(backtest.router)
 app.include_router(symbols.router)
 app.include_router(patterns.router)
+app.include_router(analysis.router)
 
 
 if __name__ == "__main__":

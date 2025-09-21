@@ -1,12 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-
-import { api } from "@/lib/api"
+import { useMemo } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { useOverview } from "@/hooks/use-overview"
 
 const currencyFormatter = (value, currency = "USD", fraction = 2) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return null
@@ -29,6 +28,25 @@ const compactNumber = (value) => {
 const clamp = (value, min = 0, max = 1) => {
   if (!Number.isFinite(value)) return min
   return Math.min(max, Math.max(min, value))
+}
+
+const SESSION_LABELS = {
+  PREMARKET: "PRE-MARKET",
+  "PRE-MARKET": "PRE-MARKET",
+  PRE: "PRE-MARKET",
+  OPEN: "OPEN",
+  REGULAR: "OPEN",
+  CONTINUOUS: "OPEN",
+  POSTMARKET: "POST-MARKET",
+  "POST-MARKET": "POST-MARKET",
+  POST: "POST-MARKET",
+  CLOSED: "CLOSED",
+}
+
+const normalizeSession = (value) => {
+  if (!value) return "CLOSED"
+  const key = String(value).toUpperCase()
+  return SESSION_LABELS[key] || "CLOSED"
 }
 
 const KPI_TOKENS = {
@@ -92,7 +110,7 @@ function KpiCard({ label, value, sublabel, tooltip, labelAddon, valueClass, chil
   )
 }
 
-function VolumeCard({ volume, avgVolume, isPreMarket, isAfterHours }) {
+function VolumeCard({ volume, avgVolume, session }) {
   const hasVolume = Number.isFinite(Number(volume))
   const hasAvg = Number.isFinite(Number(avgVolume)) && Number(avgVolume) > 0
   const ratio = hasAvg && hasVolume ? Number(volume) / Number(avgVolume) : null
@@ -108,9 +126,10 @@ function VolumeCard({ volume, avgVolume, isPreMarket, isAfterHours }) {
     ? "Gauge spans 0 to 2× average volume with midpoint at the 30-day average."
     : "Gauge baseline unavailable because the 30-day average is missing."
 
+  const sessionUpper = (session || "").toUpperCase()
   const statusBadges = [
-    isAfterHours ? "AH" : null,
-    isPreMarket ? "Pre" : null,
+    sessionUpper === "POST-MARKET" ? "AH" : null,
+    sessionUpper === "PRE-MARKET" ? "Pre" : null,
   ].filter(Boolean)
 
   return (
@@ -401,58 +420,28 @@ function formatDate(value) {
 }
 
 export function OverviewSection({ ticker }) {
-  const [data, setData] = useState(null)
-  const [err, setErr] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const { data, err, loading, reload } = useOverview(ticker)
 
-  const load = async () => {
-    setLoading(true)
-    setErr(null)
-    try {
-      const json = await api(`/overview/${ticker}`)
-      setData(json)
-    } catch (e) {
-      setErr(e)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const skeletonKeys = [
+    "volume",
+    "day",
+    "week",
+    "cap",
+    "pe",
+    "eps",
+    "beta",
+    "shares",
+    "float",
+    "dividend",
+    "yield",
+  ]
 
-  useEffect(() => {
-    if (ticker) {
-      load()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticker])
-
-  if (loading) {
-    const skeletonKeys = [
-      "volume",
-      "day",
-      "week",
-      "open",
-      "prev",
-      "cap",
-      "pe",
-      "eps",
-      "beta",
-      "shares",
-      "float",
-      "dividend",
-      "yield",
-    ]
-
+  if (loading && !data) {
     return (
       <div className="space-y-6 px-[5%]">
         <div className="grid grid-cols-12 gap-4">
           {skeletonKeys.map((key) => (
-            <div
-              key={key}
-              className={cn(
-                "col-span-12",
-                "md:col-span-6",
-                "lg:col-span-4"
-              )}
+            <div key={key} className={cn("col-span-12", "md:col-span-6", "lg:col-span-4")}
             >
               <Skeleton className="h-[178px] w-full rounded-2xl bg-zinc-800/60" />
             </div>
@@ -467,7 +456,7 @@ export function OverviewSection({ ticker }) {
     return (
       <div className="px-[5%] text-sm text-red-500">
         Unable to load data —
-        <button type="button" className="ml-1 underline" onClick={load}>
+        <button type="button" className="ml-1 underline" onClick={reload}>
           Retry
         </button>
       </div>
@@ -483,8 +472,6 @@ export function OverviewSection({ ticker }) {
     dayRange,
     week52Range,
     currency,
-    open,
-    previousClose,
     marketCap,
     peRatio,
     eps,
@@ -499,12 +486,12 @@ export function OverviewSection({ ticker }) {
     nextDividendDate,
     dividendFrequency,
     dividendYield,
-    isPreMarket,
-    isAfterHours,
+    priceSession,
     lastClose,
     performance,
   } = data
 
+  const sessionLabel = normalizeSession(priceSession)
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-6 px-[5%]">
@@ -514,8 +501,7 @@ export function OverviewSection({ ticker }) {
             <VolumeCard
               volume={volume}
               avgVolume={avgVolume}
-              isPreMarket={isPreMarket}
-              isAfterHours={isAfterHours}
+              session={sessionLabel}
             />
           </div>
           <div className="col-span-12 md:col-span-6 lg:col-span-4">
@@ -530,25 +516,9 @@ export function OverviewSection({ ticker }) {
               currency={currency}
             />
           </div>
-
-          <div className="col-span-12 md:col-span-6 lg:col-span-4">
-            <MetricCard
-              label="Open"
-              value={currencyFormatter(open, currency)}
-              sublabel={`Units: ${currency ?? "USD"}`}
-            />
-          </div>
-          <div className="col-span-12 md:col-span-6 lg:col-span-4">
-            <MetricCard
-              label="Prev Close"
-              value={currencyFormatter(previousClose, currency)}
-              sublabel={`Units: ${currency ?? "USD"}`}
-            />
-          </div>
           <div className="col-span-12 md:col-span-6 lg:col-span-4">
             <MetricCard label="Market Cap" value={compactNumber(marketCap)} sublabel={`${currency ?? "USD"}`} />
           </div>
-
           <div className="col-span-12 md:col-span-6 lg:col-span-4">
             <MetricCard
               label="P/E"
@@ -570,7 +540,6 @@ export function OverviewSection({ ticker }) {
               sublabel="Unitless"
             />
           </div>
-
           <div className="col-span-12 md:col-span-6 lg:col-span-4">
             <MetricCard label="Shares Out" value={compactNumber(sharesOutstanding)} sublabel="Shares" />
           </div>

@@ -1,24 +1,24 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Search, Brain, BarChart3 } from "lucide-react"
+import { Search, BarChart3, Target } from "lucide-react"
 
 export default function HowItWorks() {
   const steps = [
     {
       icon: Search,
       title: "Search a Ticker",
-      description: "Enter any stock symbol to start your analysis journey",
-    },
-    {
-      icon: Brain,
-      title: "Run AI Prediction",
-      description: "Our advanced algorithms analyze market data and generate forecasts",
+      description: "Enter any stock symbol and choose the time interval",
     },
     {
       icon: BarChart3,
-      title: "Detect Patterns",
-      description: "Identify classical chart patterns using YOLOv8",
+      title: "Generate Market Report",
+      description: "We fetch OHLCV, compute indicators, and explain the trend with clear takeaways",
+    },
+    {
+      icon: Target,
+      title: "Act with a Plan",
+      description: "Review suggested entries, stops, and targets before you pull the trigger",
     },
   ]
 

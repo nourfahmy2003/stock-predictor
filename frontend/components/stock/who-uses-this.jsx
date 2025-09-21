@@ -42,7 +42,7 @@ export function WhoUsesThis() {
       <div className="text-center mb-12">
         <h2 className="text-3xl font-bold text-white font-poppins mb-4">Who Uses This</h2>
         <p className="text-xl text-muted max-w-3xl mx-auto">
-          Students, early-career analysts, and retail investors use this to explore data and view AI predictions.
+          Students, early-career analysts, and retail investors use this to translate raw market data into clear plans.
         </p>
       </div>
 

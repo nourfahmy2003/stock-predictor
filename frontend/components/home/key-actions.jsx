@@ -1,27 +1,27 @@
 "use client"
 
-import { BarChart3, Brain, TrendingUp, Newspaper } from "lucide-react"
+import { BarChart3, Target, Layers, Newspaper } from "lucide-react"
 import FeatureCard from "./feature-card"
 
 export default function KeyActions() {
   const actions = [
     {
       icon: BarChart3,
-      title: "Explore Data",
+      title: "Run Trend Scan",
       description:
-        "Dive deep into stock prices, trading volumes, and market trends with interactive charts and real-time data.",
+        "Instantly evaluate moving averages, MACD, RSI, and more to understand who controls the tape right now.",
     },
     {
-      icon: Brain,
-      title: "Train Model",
+      icon: Layers,
+      title: "Map Key Levels",
       description:
-        "Let our AI analyze historical patterns and market signals to create personalized prediction models for any stock.",
+        "Auto-detect pivots and volatility regimes so you know which prices matter before you place a trade.",
     },
     {
-      icon: TrendingUp,
-      title: "View Predictions",
+      icon: Target,
+      title: "Build Trade Plan",
       description:
-        "Get clear, actionable forecasts with confidence intervals and risk assessments to guide your decisions.",
+        "Generate entry ideas, stops, and targets backed by indicator consensus and risk notes in plain English.",
     },
     {
       icon: Newspaper,

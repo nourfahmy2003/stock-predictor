@@ -1,7 +1,7 @@
 import PriceHeader from "@/components/stock/PriceHeader"
 import DayRange from "@/components/stock/DayRange"
 import PriceChart from "@/components/stock/PriceChart.client"
-import { PredictionPanel } from "@/components/stock/prediction-panel"
+import AnalysisPanel from "@/components/stock/analysis-panel"
 
 async function getData(symbol) {
   const base = process.env.NEXT_PUBLIC_BASE_URL
@@ -24,7 +24,7 @@ export default async function Page({ params }) {
         </div>
       </div>
       <div className="mt-8">
-        <PredictionPanel ticker={symbol} />
+        <AnalysisPanel symbol={symbol} />
       </div>
     </div>
   )

@@ -9,11 +9,10 @@ import dynamic from "next/dynamic";
 const PriceChart = dynamic(() => import("@/components/stock/PriceChart"), { ssr: false });
 import LatestHeadlines from "@/components/stock/LatestHeadlines";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { api } from "@/lib/api";
 import FilingsPanel from "@/components/filings/FilingsPanel";
 import { LoadingText } from "@/components/LoadingText";
 
-const PredictionPanel = dynamic(() => import("@/components/stock/prediction-panel"), { ssr: false });
+const AnalysisPanel = dynamic(() => import("@/components/stock/analysis-panel"), { ssr: false });
 
 const PatternsPanel = dynamic(
   () => import("@/components/stock/patterns-panel").then((m) => m.PatternsPanel),
@@ -34,32 +33,11 @@ export default function TickerPage() {
     if (tab) setActiveTab(tab)
   }, [searchParams])
 
-  useEffect(() => {
-    if (!ticker) return;
-    async function startPrediction() {
-      try {
-        const body = { ticker, look_back: 60, horizon: 10 };
-        const res = await api(`/predict`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const jobId = res.jobId || res.job_id || res.id;
-        if (jobId) {
-          localStorage.setItem(`predjob:${ticker}`, JSON.stringify({ jobId, startedAt: Date.now() }));
-        }
-      } catch (e) {
-        console.error("failed to start prediction", e);
-      }
-    }
-    startPrediction();
-  }, [ticker]);
-
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'filings', label: 'Filings' },
     { id: 'news', label: 'News' },
-    { id: 'predictions', label: 'Predictions' },
+    { id: 'analysis', label: 'Trend Analysis' },
     { id: 'patterns', label: 'Patterns (YOLO)' },
   ]
 
@@ -101,15 +79,15 @@ export default function TickerPage() {
 
             {activeTab === 'news' && <NewsPanel ticker={ticker} />}
 
-            {activeTab === 'predictions' && (
+            {activeTab === 'analysis' && (
               <Suspense
                 fallback={
                   <LoadingText>
-                    Running prediction… this can take a few minutes.
+                    Loading analysis report…
                   </LoadingText>
                 }
               >
-                <PredictionPanel ticker={ticker} />
+                <AnalysisPanel symbol={ticker} />
               </Suspense>
             )}
 

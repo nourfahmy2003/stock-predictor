@@ -1,6 +1,5 @@
-import { PredictionPanel } from "@/components/stock/prediction-panel";
+import AnalysisPanel from "@/components/stock/analysis-panel";
 
 export default function ForecastPage() {
-  // Default ticker for legacy forecast page
-  return <PredictionPanel ticker="AAPL" />;
+  return <AnalysisPanel symbol="AAPL" defaultInterval="5m" />;
 }

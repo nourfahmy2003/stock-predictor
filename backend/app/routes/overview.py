@@ -7,6 +7,8 @@ import yfinance as yf
 from fastapi import APIRouter, HTTPException
 from zoneinfo import ZoneInfo
 
+from app.services.analysis.data.fetch import fetch_stock_data
+
 router = APIRouter()
 
 NY_TZ = ZoneInfo("America/New_York")
@@ -39,6 +41,17 @@ def _regular_session_window(now: datetime):
     close_time = session["market_close"].tz_convert(NY_TZ)
     is_open = open_time <= now <= close_time
     return is_open, open_time, close_time
+
+
+def _find_next_regular_open(now: datetime) -> Optional[datetime]:
+    schedule = NYSE_CAL.schedule(start_date=now.date(), end_date=now.date() + timedelta(days=10))
+    if schedule.empty:
+        return None
+    for _, row in schedule.iterrows():
+        open_time = row["market_open"].tz_convert(NY_TZ)
+        if open_time > now:
+            return open_time
+    return None
 
 
 def _iso_date(value: Optional[float]) -> Optional[str]:
@@ -269,6 +282,17 @@ def overview(ticker: str):
         pre_market_price = fi.get("pre_market_price")
         post_market_price = fi.get("post_market_price")
 
+        analysis_price = None
+        analysis_prev_close = None
+        try:
+            analysis_history = fetch_stock_data(ticker, "5m", include_prepost=True)
+            if analysis_history is not None and not analysis_history.empty:
+                analysis_price = float(analysis_history["Close"].iloc[-1])
+                if len(analysis_history) > 1:
+                    analysis_prev_close = float(analysis_history["Close"].iloc[-2])
+        except Exception:
+            analysis_history = None
+
         def _first_price(*values):
             for val in values:
                 if val is not None and val != 0:
@@ -280,7 +304,7 @@ def overview(ticker: str):
 
         if is_crypto_asset:
             price_session = "continuous"
-            display_price = _first_price(price, regular_market_price, prev_close)
+            display_price = _first_price(analysis_price, price, regular_market_price, prev_close)
             is_pre_market = False
             is_after_hours = False
             market_open = True
@@ -291,6 +315,12 @@ def overview(ticker: str):
             price_session = "regular"
             is_pre_market = False
             is_after_hours = False
+
+            post_end = (
+                datetime.combine(session_close.date(), POSTMARKET_END, tzinfo=NY_TZ)
+                if session_close is not None
+                else None
+            )
 
             pre_window = (
                 session_open
@@ -304,21 +334,21 @@ def overview(ticker: str):
             )
 
             if is_pre_market_state or pre_window:
-                display_price = _first_price(pre_market_price, price, prev_close)
+                display_price = _first_price(analysis_price, pre_market_price, price, prev_close)
                 price_session = "premarket"
                 is_pre_market = True
                 market_open = False
             elif is_after_hours_state or post_window:
-                display_price = _first_price(post_market_price, price, prev_close)
+                display_price = _first_price(analysis_price, post_market_price, price, prev_close)
                 price_session = "postmarket"
                 is_after_hours = True
                 market_open = False
             elif market_open_flag:
-                display_price = _first_price(regular_market_price, price)
+                display_price = _first_price(analysis_price, regular_market_price, price)
                 price_session = "regular"
                 market_open = bool(display_price is not None and market_open_flag)
             else:
-                display_price = _first_price(prev_close, regular_market_price, price)
+                display_price = _first_price(analysis_price, post_market_price, regular_market_price, price, prev_close)
                 price_session = "closed"
                 market_open = False
 
@@ -329,7 +359,47 @@ def overview(ticker: str):
                 price_session = "closed"
                 market_open = False
 
-        last_close = prev_close if prev_close is not None else display_price
+        if is_crypto_asset:
+            post_end = None
+            next_event = None
+            next_session_label = None
+        else:
+            post_end = (
+                datetime.combine(session_close.date(), POSTMARKET_END, tzinfo=NY_TZ)
+                if session_close is not None
+                else None
+            )
+            next_event = None
+            next_session_label = None
+            if price_session == "premarket" and session_open is not None:
+                next_event = session_open
+                next_session_label = "regular"
+            elif price_session == "regular" and session_close is not None:
+                next_event = session_close
+                next_session_label = "postmarket"
+            elif price_session == "postmarket" and post_end is not None:
+                next_event = post_end
+                next_session_label = "closed"
+            else:
+                next_event = _find_next_regular_open(now_ny)
+                if next_event is not None:
+                    next_session_label = "regular"
+
+            if next_event is None:
+                next_event = _find_next_regular_open(now_ny)
+                if next_event is not None and next_session_label is None:
+                    next_session_label = "regular"
+
+        ref_prev_close = None
+        if prev_close is not None:
+            try:
+                ref_prev_close = float(prev_close)
+            except (TypeError, ValueError):
+                ref_prev_close = None
+        if ref_prev_close is None and analysis_prev_close is not None:
+            ref_prev_close = float(analysis_prev_close)
+
+        last_close = ref_prev_close if ref_prev_close is not None else display_price
         derived_yield = None
         if ttm_dividend and last_close:
             derived_yield = (ttm_dividend / float(last_close)) * 100
@@ -363,10 +433,10 @@ def overview(ticker: str):
         display_price = float(display_price) if display_price is not None else None
 
         change = change_pct = None
-        if display_price is not None and prev_close is not None:
-            change = float(display_price) - float(prev_close)
-            if prev_close:
-                change_pct = change / float(prev_close)
+        if display_price is not None and ref_prev_close is not None:
+            change = float(display_price) - float(ref_prev_close)
+            if ref_prev_close:
+                change_pct = change / float(ref_prev_close)
 
         return {
             "ticker": ticker,
@@ -387,7 +457,7 @@ def overview(ticker: str):
                 "high": float(week52_high) if week52_high is not None else None,
             },
             "open": float(open_price) if open_price is not None else None,
-            "previousClose": float(prev_close) if prev_close is not None else None,
+            "previousClose": float(ref_prev_close) if ref_prev_close is not None else None,
             "sharesOutstanding": int(shares_out) if shares_out is not None else None,
             "floatShares": int(float_shares) if float_shares is not None else None,
             "beta": float(beta) if beta is not None else None,
@@ -410,8 +480,13 @@ def overview(ticker: str):
             "regularMarketPrice": float(regular_market_price) if regular_market_price is not None else None,
             "priceSession": price_session,
             "marketOpen": market_open,
+            "marketTimezone": getattr(NY_TZ, "key", "America/New_York"),
             "instrumentType": "crypto" if is_crypto_asset else "equity",
             "lastClose": float(last_close) if last_close is not None else None,
+            "analysisPrice": float(analysis_price) if analysis_price is not None else None,
+            "analysisPrevClose": float(analysis_prev_close) if analysis_prev_close is not None else None,
+            "nextSessionChange": next_event.isoformat() if next_event is not None else None,
+            "nextSessionLabel": next_session_label,
             "performance": performance,
         }
     except Exception as exc:

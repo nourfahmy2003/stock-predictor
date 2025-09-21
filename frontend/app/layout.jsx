@@ -26,7 +26,7 @@ const robotoMono = Roboto_Mono({
 
 export const metadata = {
   title: "MarketPulse - AI-Powered Stock Analysis",
-  description: "AI-powered stock analysis and prediction platform for students, analysts, and retail investors",
+  description: "AI-powered trend analysis and trade planning for students, analysts, and retail investors",
   generator: "v0.app",
 }
 
